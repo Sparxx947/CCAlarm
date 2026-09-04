@@ -14,6 +14,10 @@ local Welt = {
     auren   = {},          -- unit -> Liste von Aurentabellen
     tot     = {},
     loc     = {},          -- aktive Kontrollverluste des Spielers
+    zeit    = 1000,        -- GetTime; steuerbar, weil der Sperr-Cache je Frame haelt
+    geheim  = false,       -- was C_Secrets.ShouldAurasBeSecret antwortet
+    wirft   = {},          -- unit -> true: der Aura-Aufruf wirft (wie im Spiel)
+    wirftAlle = false,
 }
 local Ausgabe, Toene = {}, 0
 
@@ -26,7 +30,7 @@ local echtesPrint = io.write
 
 wipe = function(t) for k in pairs(t) do t[k] = nil end return t end
 GetLocale = function() return "enUS" end
-GetTime = function() return 1000 end
+GetTime = function() return Welt.zeit end
 UnitName = function(u) return u end
 UnitIsDeadOrGhost = function(u) return Welt.tot[u] or false end
 UnitExists = function(u) return Welt.rollen[u] ~= nil end
@@ -42,9 +46,21 @@ SOUNDKIT = { RAID_WARNING = 1, READY_CHECK = 2, UI_RAID_BOSS_WHISPER_WARNING = 3
              UI_MAP_WAYPOINT_CHAT_SHARE = 4 }
 C_Timer = { After = function() end }
 C_Spell = { GetSpellName = function(id) return "Zauber" .. id end }
+-- Im Spiel gibt GetAuraDataByIndex bei geheimen Auren nicht nil zurueck --
+-- es WIRFT. Genau das stellt Welt.wirft nach; ein Rueckgabewert nil haette den
+-- Fehler vom 04.09. (14004 Vorfaelle) nie reproduziert.
 C_UnitAuras = {
-    GetAuraDataByIndex = function(unit, i) return (Welt.auren[unit] or {})[i] end,
+    GetAuraDataByIndex = function(unit, i)
+        if Welt.wirftAlle or Welt.wirft[unit] then
+            error("GetAuraDataByIndex(): Auras cannot be accessed when secret "
+                  .. "while tainted by 'CCAlarm'", 2)
+        end
+        return (Welt.auren[unit] or {})[i]
+    end,
 }
+-- Bewusst NICHT von Anfang an gesetzt: Abschnitt 15 prueft auch die Fassung
+-- ohne C_Secrets, in der nur die pcall-Sonde traegt.
+C_Secrets = nil
 C_LossOfControl = {
     GetActiveLossOfControlDataCount = function() return #Welt.loc end,
     GetActiveLossOfControlData = function(i) return Welt.loc[i] end,
@@ -590,6 +606,100 @@ SlashCmdList.CCALARM("add " .. saatId)
 pruefe("Wiederaufnehmen hebt das Entfernen auf", ns.IsKnown(saatId) ~= nil)
 CCAlarmDB.rejected = {}
 CCAlarmDB.known[saatId] = nil
+
+echtesPrint("\n=== 15. Geheime Auren in Mythic+ und PvP (der Fehler vom 04.09.) ===\n")
+-- 14004 Vorfaelle an einem Abend: GetAuraDataByIndex wirft, sobald Blizzard die
+-- Auren geheim haelt. Geprueft wird deshalb BEIDES -- dass kein Fehler mehr
+-- durchschlaegt, UND dass der Alarm ohne Sperre unveraendert kommt. Ein Tor,
+-- das immer sperrt, waere ebenso kaputt wie gar keins.
+local MELDUNG = ns.L["MSG_AURAS_SECRET"]
+local function meldungen()
+    local n = 0
+    for _, zeile in ipairs(Ausgabe) do
+        if zeile:find(MELDUNG, 1, true) then n = n + 1 end
+    end
+    return n
+end
+local function auraAufHeiler(instanz)
+    Welt.auren.party1 = { { spellId = 4321, duration = 4,
+                            expirationTime = Welt.zeit + 4, icon = 1, name = "B",
+                            auraInstanceID = instanz } }
+end
+
+CCAlarmDB.known[4321] = "STUN"
+
+-- (a) C_Secrets meldet die Sperre
+Welt.zeit = 2000
+ruecksetzen()
+C_Secrets = { ShouldAurasBeSecret = function() return Welt.geheim end }
+Welt.geheim, Welt.wirftAlle = true, true
+auraAufHeiler(1501)
+local ok = pcall(handler, addon, "UNIT_AURA", "party1")
+pruefe("gesperrte Auren werfen keinen Lua-Fehler mehr", ok)
+pruefe("gesperrt: kein Alarm", not anzeigeSichtbar())
+pruefe("gesperrt: es wird gesagt, statt still zu schweigen", meldungen() == 1)
+
+-- (b) und zwar genau einmal, nicht bei jedem UNIT_AURA
+Welt.zeit = 2001
+pcall(handler, addon, "UNIT_AURA", "party1")
+Welt.zeit = 2002
+pcall(handler, addon, "UNIT_AURA", "party1")
+pruefe("die Meldung kommt nur einmal je Instanz", meldungen() == 1)
+
+-- (c) in der naechsten Instanz aber wieder
+Welt.zeit = 2003
+ruecksetzen()
+auraAufHeiler(1502)
+pcall(handler, addon, "UNIT_AURA", "party1")
+pruefe("nach dem Zonenwechsel wird erneut gewarnt", meldungen() == 1)
+
+-- (d) aeltere Fassung ohne C_Secrets: allein die pcall-Sonde muss tragen
+Welt.zeit = 2004
+ruecksetzen()
+C_Secrets = nil
+auraAufHeiler(1503)
+local okSonde = pcall(handler, addon, "UNIT_AURA", "party1")
+pruefe("ohne C_Secrets faengt die pcall-Sonde die Sperre ab", okSonde)
+pruefe("ohne C_Secrets: kein Alarm", not anzeigeSichtbar())
+
+-- (e) Sperre greift zwischen Tor und Aufruf: die Sonde auf "player" ist frei,
+--     der Zugriff auf party1 wirft trotzdem. Ohne das pcall am Aufruf selbst
+--     stuende hier wieder ein Lua-Fehler.
+Welt.zeit = 2005
+ruecksetzen()
+Welt.wirftAlle = false
+Welt.wirft = { party1 = true }
+auraAufHeiler(1504)
+local okMitten = pcall(handler, addon, "UNIT_AURA", "party1")
+pruefe("Sperre mitten im Durchlauf wirft keinen Fehler", okMitten)
+pruefe("Sperre mitten im Durchlauf: kein halbgarer Alarm", not anzeigeSichtbar())
+
+-- (f) Gegenprobe: ohne jede Sperre muss der Alarm unveraendert kommen.
+--     Sonst pruefte Abschnitt 15 nur, dass das Tor immer zu ist.
+-- ACHTUNG Reihenfolge: ruecksetzen() feuert PLAYER_ENTERING_WORLD und damit
+-- einen Scan. Wer die Sperrschalter erst danach loest, misst noch den
+-- vorherigen Fall -- genau daran ist diese Gegenprobe beim Schreiben einmal
+-- gescheitert.
+Welt.zeit = 2006
+Welt.wirft, Welt.wirftAlle, Welt.geheim = {}, false, false
+C_Secrets = { ShouldAurasBeSecret = function() return Welt.geheim end }
+ruecksetzen()
+auraAufHeiler(1505)
+local okFrei = pcall(handler, addon, "UNIT_AURA", "party1")
+pruefe("ohne Sperre laeuft der Scan weiter", okFrei)
+pruefe("ohne Sperre kommt der Alarm wie zuvor", anzeigeSichtbar())
+pruefe("ohne Sperre wird nichts gemeldet", meldungen() == 0)
+
+-- (g) /ccalarm status darf nicht an der Sperre scheitern und muss sie nennen
+Welt.zeit = 2007
+ruecksetzen()
+Welt.geheim, Welt.wirftAlle = true, true   -- nach dem Scan aus ruecksetzen()
+local okStatus = pcall(SlashCmdList.CCALARM, "status")
+pruefe("/ccalarm status laeuft auch gesperrt", okStatus)
+pruefe("/ccalarm status nennt die Sperre", meldungen() >= 1)
+
+Welt.geheim, Welt.wirftAlle, Welt.wirft = false, false, {}
+CCAlarmDB.known[4321] = nil
 
 echtesPrint(("\n%d bestanden, %d gescheitert\n\n"):format(bestanden, gescheitert))
 os.exit(gescheitert == 0 and 0 or 1)

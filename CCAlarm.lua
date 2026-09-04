@@ -17,6 +17,10 @@
 -- tank that is not known yet is recorded as a candidate and can be promoted
 -- with a slash command.
 
+-- One hard limit sits above all of this: in Mythic+ and PvP, Blizzard keeps
+-- auras secret from addons entirely (see aurasRestricted below). There the
+-- group cannot be watched at all -- no workaround exists, only saying so.
+
 local ADDON, ns = ...
 local L = ns.L
 local CCAlarm = CreateFrame("Frame", "CCAlarmFrame")
@@ -209,6 +213,47 @@ local function groupUnits()
         end
     end
     return out
+end
+
+-- Secret values (Midnight 12.x): inside Mythic+ and PvP the aura APIs refuse to
+-- answer once an addon sits anywhere in the call path. GetAuraDataByIndex does
+-- not return nil then -- it THROWS. Unguarded that produced 14004 errors in a
+-- single dungeon evening (2026-09-04) and aborted every scan on the way.
+--
+-- Blizzard's own query comes first, the pcall probe stays as a fallback for
+-- builds without C_Secrets. Neither is a data source: when they say
+-- "restricted", other group members' auras cannot be read at all.
+--
+-- The cache is ASYMMETRIC on purpose. Only the RESTRICTED answer is kept, and
+-- only for the current frame, because that is the branch whose probe builds a
+-- real Lua error -- constructing the error is the expensive part, and scan()
+-- runs on every UNIT_AURA. A stale "free" answer would send the scan straight
+-- into a hard error the moment restriction engages mid-frame; a stale
+-- "restricted" costs one skipped frame. Same reasoning as EllesmereUI's
+-- AuraKit, which has carried this shape through the whole 12.x cycle.
+local restrictedStamp = -1
+local function aurasRestricted()
+    local now = GetTime()
+    if C_Secrets and C_Secrets.ShouldAurasBeSecret and C_Secrets.ShouldAurasBeSecret() then
+        restrictedStamp = now
+        return true
+    end
+    if now == restrictedStamp then return true end
+    if pcall(C_UnitAuras.GetAuraDataByIndex, "player", 1, "HELPFUL") then
+        return false
+    end
+    restrictedStamp = now
+    return true
+end
+
+-- Said once per instance, and that is the whole point: an alarm addon that goes
+-- quiet exactly where it is needed must not go quiet in silence. Reset in
+-- PLAYER_ENTERING_WORLD so the next dungeon says it again.
+local restrictionAnnounced = false
+local function announceRestriction()
+    if restrictionAnnounced then return end
+    restrictionAnnounced = true
+    say(L["MSG_AURAS_SECRET"])
 end
 
 -------------------------------------------------------------------------------
@@ -473,13 +518,29 @@ local function scan()
         return
     end
 
+    if aurasRestricted() then
+        announceRestriction()
+        if display then display:Hide() end
+        return
+    end
+
     local hits = {}
     for _, unit in ipairs(groupUnits()) do
         local role = UnitGroupRolesAssigned(unit)
         if db.roles[role] and not UnitIsDeadOrGhost(unit) then
             local i = 1
             while true do
-                local aura = C_UnitAuras.GetAuraDataByIndex(unit, i, "HARMFUL")
+                -- Second line of defence: restriction can engage between the
+                -- gate above and this call. Stop the whole pass, not just this
+                -- unit -- the remaining ones would throw just the same, and
+                -- half-read data must not raise a half-informed alarm.
+                local ok, aura = pcall(C_UnitAuras.GetAuraDataByIndex, unit, i, "HARMFUL")
+                if not ok then
+                    restrictedStamp = GetTime()
+                    announceRestriction()
+                    if display then display:Hide() end
+                    return
+                end
                 if not aura then break end
                 local id = aura.spellId
                 if id and ns.IsKnown(id) then
@@ -552,6 +613,8 @@ local function command(input)
             db.roles.TANK and L["ROLE_TANK_SHORT"] or "",
             known, candidates,
             zoneAllowed() and L["MSG_YES"] or L["MSG_NO"])
+        -- "active here: yes" would be a lie while the auras are locked away.
+        if aurasRestricted() then say(L["MSG_AURAS_SECRET"]) end
     elseif word == "test" then
         -- Prove the alarm path without waiting for real crowd control.
         ns.Test()
@@ -650,6 +713,9 @@ CCAlarm:SetScript("OnEvent", function(self, event, arg1)
         if not (arg1:match("^party%d$") or arg1:match("^raid%d+$")) then return end
     end
 
-    if event == "PLAYER_ENTERING_WORLD" then wipe(activeAlarms) end
+    if event == "PLAYER_ENTERING_WORLD" then
+        wipe(activeAlarms)
+        restrictionAnnounced = false
+    end
     scan()
 end)

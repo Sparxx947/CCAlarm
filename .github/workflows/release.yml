@@ -51,6 +51,7 @@ jobs:
           python3 tools/check_selfcontained.py
           python3 tools/check_locales.py
           python3 tools/check_privacy.py
+          python3 tools/check_secret_auras.py
       # Stehende Regel: der Tag gehoert auf den Merge-Commit auf main, nicht auf
       # die Zweigspitze, die geprueft wurde. Heruntergeladen wird am Ende, was
       # auf main gelandet ist -- also hier nachweisen, dass genau das getaggt ist.

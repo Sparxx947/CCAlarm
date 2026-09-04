@@ -10,3 +10,7 @@ ignore:
   - tools
   - .github
   - CHANGELOG.md
+  # Nur fuer die CurseForge-Projektseite, nicht fuer das Spiel. Waere die Datei
+  # im Zip, laedt WoW sie mit, ohne sie je zu benutzen.
+  - docs
+  - Media/logo.png

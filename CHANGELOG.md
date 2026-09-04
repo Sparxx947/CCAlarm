@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.2.1 — 2026-09-04
+
+Urheberangabe berichtigt.
+
+- **`## Author` und der Lizenzhalter nannten `jfstn`** — den ursprünglichen
+  Autor eines *anderen* Addons. Die Zeile war beim Aufsetzen des Repos
+  versehentlich übernommen worden und schrieb dieses Addon damit einer fremden
+  Person zu. Jetzt korrekt: `Sparxx947`.
+- Die Datenschutzprüfung sieht sich zusätzlich die **Git-Historie** an und
+  meldet jeden unerwarteten Autor — über **alle** Referenzen, nicht nur den
+  aktuellen Zweig, damit Sicherungszweige nicht unbemerkt eine alte Angabe
+  weitertragen.
+
+*Corrects the attribution: `## Author` and the licence holder named `jfstn`, the
+original author of a different addon, carried over by mistake when the
+repository was set up. The privacy check now also inspects the git history
+across all refs and reports any unexpected author, since a backup branch would
+otherwise keep an old identity alive unnoticed.*
+
 ## 1.2.0 — 2026-09-04
 
 Ein eigener Ton je Rolle — und ein Fehler behoben, den das Einbetten der

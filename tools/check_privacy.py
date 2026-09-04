@@ -44,8 +44,45 @@ ERLAUBT = {
 }
 
 
+ERLAUBTE_AUTOREN = {
+    "Sparxx947 <79375757+Sparxx947@users.noreply.github.com>",
+    "Sparxx <79375757+Sparxx947@users.noreply.github.com>",
+    "GitHub <noreply@github.com>",
+    "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>",
+}
+
+
+def pruefe_historie() -> int:
+    """Die Git-Historie ist nach einer Veroeffentlichung nicht mehr zurueckzuholen.
+
+    Klarname und private Adresse landen dort leicht: Sie stehen in der globalen
+    Git-Konfiguration und wirken in jedem Repo, in dem nichts anderes gesetzt
+    ist. In Dateien faellt so etwas beim Lesen auf, in der Historie nie.
+    """
+    import subprocess
+    try:
+        lauf = subprocess.run(
+            # --all, nicht nur der aktuelle Zweig: Sicherungszweige und die
+            # Reste von filter-branch tragen die alte Angabe sonst unbemerkt
+            # weiter und wandern beim naechsten "push --all" doch nach draussen.
+            ["git", "-C", str(WURZEL), "log", "--all",
+             "--format=%an <%ae>%n%cn <%ce>"],
+            capture_output=True, text=True, check=True)
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        print("  (kein Git-Verlauf pruefbar)", file=sys.stderr)
+        return 0
+    fremde = {z.strip() for z in lauf.stdout.splitlines() if z.strip()} - ERLAUBTE_AUTOREN
+    for autor in sorted(fremde):
+        print(f"Historie: unerwarteter Autor {autor}", file=sys.stderr)
+    if fremde:
+        print("  Hinweis: eine bereits nach GitHub gepushte Angabe bleibt ueber\n"
+              "  refs/pull/<nr>/head erreichbar, auch nachdem der Zweig geloescht\n"
+              "  wurde. Umschreiben allein genuegt dann nicht.", file=sys.stderr)
+    return len(fremde)
+
+
 def main() -> int:
-    funde = 0
+    funde = pruefe_historie()
     for pfad in sorted(WURZEL.rglob("*")):
         if not pfad.is_file():
             continue
@@ -74,7 +111,7 @@ def main() -> int:
         return 1
     libs = WURZEL / "Libs"
     anzahl = len([p for p in libs.rglob("*") if p.is_file()]) if libs.is_dir() else 0
-    print("keine personenbezogenen Spuren gefunden"
+    print("keine personenbezogenen Spuren gefunden, Historie sauber"
           + (f" (Libs/ mit {anzahl} Fremddatei(en) ausgelassen)" if anzahl else ""))
     return 0
 

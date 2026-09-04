@@ -15,6 +15,14 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
+    # Das Geheimnis muss hier heraufgezogen werden, damit der Upload-Schritt
+    # unten ueberhaupt pruefen kann, ob es gesetzt ist: Der `secrets`-Kontext
+    # ist in `steps[*].if` NICHT verfuegbar (erlaubt sind dort nur github,
+    # needs, strategy, matrix, job, runner, env, vars, steps, inputs). Eine
+    # Bedingung `if: secrets.CF_API_TOKEN != ''` waere nie wahr geworden, und
+    # der Upload waere stillschweigend nie gelaufen.
+    env:
+      CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -63,3 +71,17 @@ jobs:
         with:
           files: dist/*.zip
           body_path: dist/release-notes.md
+      # Zuletzt, und mit Absicht: CurseForge bekommt nur, was alle Gatter oben
+      # bestanden hat. Die Projekt-ID steht in der .toc als X-Curse-Project-ID,
+      # damit sie an genau EINER Stelle gepflegt wird -- deshalb kein -p hier.
+      #
+      # Der Packager baut sein eigenes Zip nach .pkgmeta. Das ist nicht dasselbe
+      # wie dist/*.zip aus package.sh, aber beide schliessen docs und
+      # Media/logo.png aus.
+      #
+      # Die Bedingung haelt ein Release am Leben, solange der Token noch fehlt:
+      # ohne CF_API_TOKEN wuerde der Schritt scheitern und ein sonst fehlerfreies
+      # Release an der letzten Zeile umkippen.
+      - name: Zu CurseForge hochladen
+        if: env.CF_API_TOKEN != ''
+        uses: BigWigsMods/packager@v2

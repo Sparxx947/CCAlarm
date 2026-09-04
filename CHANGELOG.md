@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.2.2 — 2026-09-04
+
+**Reparaturfassung: 0.2.1 kam nie auf CurseForge an.** Am Addon selbst ändert
+sich nichts.
+
+Der Upload-Schritt meldete Erfolg, lud aber nichts hoch — er brauchte 471 ms,
+viel zu wenig für einen Netzzugriff. `packager@v2` liest **ausschließlich**
+`CF_API_KEY`; erst dessen Entwicklungszweig nimmt zusätzlich `CF_API_TOKEN` an,
+und genau den beschreibt die heutige Anleitung. Der Token blieb damit leer, und
+`upload_curseforge()` stieg in seiner ersten Zeile mit `return 0` aus: keine
+Meldung, kein Fehlercode.
+
+★ **Das Schweigen war schlimmer als der Fehler.** Ein Release sah vollständig
+aus, und bei den Nutzern kam nichts an. Deshalb wird der Token jetzt **vor** dem
+Packager gegen die CurseForge-Schnittstelle geprüft — ein Release, das nicht
+ausliefern kann, scheitert laut. Beide Alarmwege sind an der echten
+Schnittstelle nachgewiesen: ein falscher Token antwortet mit 403, ein fehlender
+mit 401, und beide brechen den Lauf ab.
+
+*Repair release: 0.2.1 never reached CurseForge. Nothing changes in the addon.
+The upload step reported success while uploading nothing — `packager@v2` reads
+only `CF_API_KEY`, whereas the current documentation describes the development
+branch, which also accepts `CF_API_TOKEN`. The token stayed empty and
+`upload_curseforge()` returned silently with exit code 0. The silence was worse
+than the fault: the release looked complete and users got nothing. The token is
+now verified against the CurseForge API before the packager runs, so a release
+that cannot deliver fails loudly. Both alarm paths were exercised against the
+live API — 403 for an invalid token, 401 for an absent one, each aborting the
+run.*
+
 ## 0.2.1 — 2026-09-04
 
 **Das Addon ist jetzt auf CurseForge zu Hause.** Am Verhalten im Spiel ändert

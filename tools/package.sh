@@ -17,7 +17,7 @@ mkdir -p "$bau/CCAlarm"
 
 # Nur das, was ins Spiel gehoert -- Pruefstand und Werkzeuge bleiben draussen.
 cp CCAlarm.toc CCAlarm.lua Locales.lua Config.lua LICENSE README.md "$bau/CCAlarm/"
-cp -r Libs "$bau/CCAlarm/"
+cp -r Libs Media "$bau/CCAlarm/"
 
 mkdir -p dist
 ziel="dist/CCAlarm-$version.zip"

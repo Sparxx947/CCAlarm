@@ -42,6 +42,32 @@ def main() -> int:
 
     # Nur die eigenen Dateien auf oberster Ebene; Bibliotheken bringen eigene
     # Hilfsdateien mit, die bewusst nicht geladen werden.
+    # Symbol: WoW zeigt ohne gueltige Datei kommentarlos das Standardbild --
+    # ein Tippfehler im Pfad faellt also nie auf. Deshalb hier pruefen, samt
+    # Format: unkomprimierte TGA mit Kantenlaengen als Zweierpotenz.
+    symbol = re.search(r"^##\s*IconTexture:\s*(.+)$", text, re.M)
+    if symbol:
+        roh = symbol.group(1).strip().replace("\\", "/")
+        rel = roh.split("/AddOns/CCAlarm/", 1)[-1]
+        treffer = [WURZEL / rel, WURZEL / (rel + ".tga"), WURZEL / (rel + ".blp")]
+        datei = next((t for t in treffer if t.exists()), None)
+        if not datei:
+            print(f"IconTexture zeigt auf eine Datei, die es nicht gibt: {roh}",
+                  file=sys.stderr)
+            fehler += 1
+        elif datei.suffix.lower() == ".tga":
+            kopf = datei.read_bytes()[:18]
+            breite = int.from_bytes(kopf[12:14], "little")
+            hoehe = int.from_bytes(kopf[14:16], "little")
+            if kopf[2] != 2:
+                print(f"{datei.name}: TGA ist komprimiert (Typ {kopf[2]}), WoW braucht Typ 2",
+                      file=sys.stderr)
+                fehler += 1
+            if breite & (breite - 1) or hoehe & (hoehe - 1):
+                print(f"{datei.name}: {breite}x{hoehe} ist keine Zweierpotenz",
+                      file=sys.stderr)
+                fehler += 1
+
     vorhanden = {p.name for p in WURZEL.glob("*.lua")}
     ungenutzt = vorhanden - set(gelistet)
     for datei in sorted(ungenutzt):

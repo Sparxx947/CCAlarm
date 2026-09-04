@@ -1,102 +1,157 @@
 # CCAlarm
 
-Ein WoW-Addon (Retail 12.1 / Midnight), das groß und laut warnt, wenn
-**Heiler oder Tank** in Kontrollverlust geraten.
+Warnt groß und laut, wenn **Heiler oder Tank** in Kontrollverlust geraten.
+Für World of Warcraft Retail (Midnight, 12.1).
+
+In Mythic+ entscheidet oft die eine Sekunde, in der niemand merkt, dass der
+Heiler betäubt ist. CCAlarm zeigt das mitten im Blickfeld: roter Warntext,
+darunter die Symbole der wirkenden Effekte mit ablaufender Restzeit, dazu ein Ton.
+
+*Warns loudly when the healer or the tank is crowd-controlled, for World of
+Warcraft Retail (Midnight, 12.1). In Mythic+ the second nobody notices the
+healer is stunned is often the one that matters; CCAlarm puts it in the middle
+of the screen — red warning text, the icons of the active effects with their
+remaining time, and a sound.*
 
 ## Installieren
 
-Den Ordner `CCAlarm` mit `CCAlarm.lua` und `CCAlarm.toc` nach
-`Interface/AddOns/` kopieren, WoW **vollständig neu starten** (kein `/reload` —
-neue Addons werden nur beim Start eingelesen), dann `/ccalarm test` aufrufen.
+Den Ordner `CCAlarm` nach `Interface/AddOns/` kopieren und WoW **vollständig
+neu starten** — neue Addons werden nur beim Start eingelesen, ein `/reload`
+genügt nicht. Danach `/ccalarm test` aufrufen: Das zeigt einen Probealarm für
+fünf Sekunden, damit Sitz und Ton stimmen, bevor es darauf ankommt.
 
-Es ist nichts vorzukonfigurieren: Das Addon lernt die nötigen Zauber im Spiel.
+Vorkonfigurieren muss man nichts.
 
-## Warum es das Addon gibt
+*Copy the `CCAlarm` folder into `Interface/AddOns/` and restart WoW completely —
+new addons are only read at startup, a `/reload` is not enough. Then run
+`/ccalarm test` for a five-second dummy alert, so position and sound are right
+before it matters. There is nothing to configure up front.*
 
-MiniAuras wurde am 2026-09-04 entfernt (Überschneidung mit InterruptTrack bei
-den Unterbrechungen). Damit fiel auch die CC-Meldung für Heiler weg, die es
-sonst nirgends gibt: InterruptTrack kennt weder `LOSS_OF_CONTROL` noch
-CC-Auren, [HealerCC](https://www.curseforge.com/wow/addons/healer-cc) deckt nur
-Heiler ab, und [Portal Authority](https://www.curseforge.com/wow/addons/portal-authority)
-ist seit April 2026 nicht mehr gepflegt.
+## Wie es CC erkennt — und warum das nicht trivial ist
 
-## Wie es CC erkennt — ohne geratene Zauber-IDs
-
-Drei Wege wurden geprüft und verworfen:
+Seit Midnight ist der naheliegende Weg versperrt. Drei Möglichkeiten wurden
+geprüft und verworfen:
 
 | Weg | Warum nicht |
 |---|---|
-| Kampfprotokoll | `COMBAT_LOG_EVENT_UNFILTERED` gibt es in Midnight nicht mehr |
-| Aura-Klassifizierung | weder `C_UnitAuras` noch die Aurendaten tragen ein CC-Feld (alle 15 genutzten Funktionen geprüft) |
-| `C_LossOfControl` für Mitspieler | liefert nur Daten über den Spieler selbst |
+| Kampfprotokoll | `COMBAT_LOG_EVENT_UNFILTERED` gibt es nicht mehr |
+| Aura-Klassifizierung | weder `C_UnitAuras` noch die Aurendaten tragen ein Feld für Kontrollverlust |
+| `C_LossOfControl` für Mitspieler | liefert ausschließlich Daten über den Spieler selbst |
 
-Übrig bleibt: eine Liste von Zauber-IDs. **Diese Liste wird nicht geraten,
-sondern gelernt.** `LOSS_OF_CONTROL_ADDED` feuert für den Spieler selbst und
-nennt Blizzards eigene Einstufung (`locType`) samt Zauber-ID. Was einen selbst
-trifft, trifft in denselben Dungeons auch Heiler und Tank — die Liste füllt sich
-also beim Spielen und gilt ab dann für die ganze Gruppe.
+Übrig bleibt eine Liste von Zauber-IDs. **Diese Liste ist nicht fest verdrahtet,
+sondern wird gelernt:** `LOSS_OF_CONTROL_ADDED` feuert für den Spieler und nennt
+Blizzards eigene Einstufung (`locType`) samt Zauber-ID. Was einen selbst trifft,
+trifft in denselben Dungeons auch Heiler und Tank — die Liste füllt sich also
+beim Spielen und gilt ab dann für die ganze Gruppe.
 
-Damit die erste Begegnung nicht verloren geht, führt das Addon zusätzlich eine
-**Kandidatenliste**: jede schädliche Aura auf Heiler oder Tank, die es noch
-nicht kennt, wird mit Namen und ID vermerkt und lässt sich per Befehl
-übernehmen.
+Damit die erste Begegnung nicht verloren geht, merkt sich das Addon zusätzlich
+jede noch unbekannte schädliche Aura auf Heiler oder Tank als **Kandidat**;
+`/ccalarm kandidaten` zeigt sie mit Namen und ID zum Übernehmen.
 
-`SCHOOL_INTERRUPT` und `DISARM` werden bewusst **nicht** gelernt — sie hindern
+`SCHOOL_INTERRUPT` und `DISARM` werden bewusst nie gelernt — sie hindern
 niemanden am Laufen oder Heilen und erzeugten nur Lärm.
+
+*Detecting crowd control on other players is not straightforward in Midnight.
+The combat log event is gone, no aura API classifies crowd control, and
+`C_LossOfControl` reports on the player only — which leaves a list of spell IDs.
+That list is learned rather than hardcoded: `LOSS_OF_CONTROL_ADDED` fires for the
+player carrying Blizzard's own `locType` classification together with the spell
+ID, and whatever hits you in a dungeon hits the healer and tank in that same
+dungeon, so the list fills itself through play and then covers the whole group.
+Harmful auras seen on those roles that are not known yet are recorded as
+candidates, listed by `/ccalarm candidates` for promotion.
+`SCHOOL_INTERRUPT` and `DISARM` are never learned: neither stops anyone from
+moving or healing.*
+
+## Grenzen
+
+Ehrlich benannt, damit niemand sich auf etwas verlässt, was das Addon nicht kann:
+
+- **Am Anfang ist die Liste leer.** Sie füllt sich, sobald einen selbst zum
+  ersten Mal ein bestimmter Effekt trifft — oder man einen Kandidaten übernimmt.
+- **Private Auren und einige Encounter-Mechaniken sind für Addons unsichtbar.**
+  Was Blizzard verbirgt, kann auch dieses Addon nicht sehen.
+- **Nur Gruppenmitglieder.** Für einen selbst zeigt WoW seine eigene
+  Kontrollverlust-Anzeige mitten im Bild.
+- **Rollen kommen aus der Gruppenzuweisung** (`UnitGroupRolesAssigned`). Wer
+  ohne zugewiesene Rolle unterwegs ist, wird nicht überwacht.
+
+*Limitations, stated plainly: the list starts empty and fills as effects hit you
+for the first time or as candidates are promoted; private auras and some
+encounter mechanics are hidden from addons entirely; only group members are
+watched, since WoW draws its own loss-of-control display for yourself; and roles
+come from the group role assignment, so a member without an assigned role is not
+watched.*
 
 ## Befehle
 
-| Befehl | Wirkung |
-|---|---|
-| `/ccalarm test` | Probealarm für 5 Sekunden — zeigt Sitz und Ton, ohne auf echten CC zu warten |
-| `/ccalarm status` | an/aus, überwachte Rollen, Zahl der gelernten Zauber, gilt hier |
-| `/ccalarm liste` | alle gelernten Zauber mit Einstufung |
-| `/ccalarm kandidaten` | gesehene, noch unbekannte Auren auf Heiler/Tank |
-| `/ccalarm dazu <id>` | Zauber-ID aufnehmen |
-| `/ccalarm weg <id>` | Zauber-ID entfernen |
-| `/ccalarm an` / `aus` | ein- und ausschalten |
+Englisch ist die Grundform, die deutschen Wörter funktionieren ebenso.
+
+| Befehl | Deutsch | Wirkung |
+|---|---|---|
+| `/ccalarm test` | | Probealarm für 5 Sekunden |
+| `/ccalarm status` | | an/aus, Rollen, Zahl der gelernten Zauber, gilt hier |
+| `/ccalarm list` | `liste` | alle gelernten Zauber mit Einstufung |
+| `/ccalarm candidates` | `kandidaten` | gesehene, noch unbekannte Auren |
+| `/ccalarm add <id>` | `dazu` | Zauber-ID aufnehmen |
+| `/ccalarm remove <id>` | `weg` | Zauber-ID entfernen |
+| `/ccalarm clear` | `leeren` | Kandidatenliste leeren |
+| `/ccalarm on` / `off` | `an` / `aus` | ein- und ausschalten |
+
+*English is the primary form; the German words in the second column work as
+aliases.*
 
 ## Anzeige
 
-Übernimmt die Maße, die in MiniAuras eingestellt waren: roter Warntext
-(Friz Quadrata 32, Umriss) oben mittig bei Y −220, darunter bis zu 5 Symbole
-à 50 px mit ablaufendem Cooldown, dazu ein Ton. Aktiv in Dungeon, Arena und
-offener Welt; im Schlachtzug und Schlachtfeld still.
+Roter Warntext oben mittig, darunter bis zu fünf Symbole à 50 px mit ablaufendem
+Cooldown, dazu ein Ton. Aktiv in Dungeon, Arena und offener Welt; im Schlachtzug
+und auf Schlachtfeldern still. Die Werte stehen in `CCAlarmDB` und lassen sich
+dort ändern.
 
-## Prüfstand
+*Red warning text at the top centre, up to five 50 px icons with a running
+cooldown underneath, plus a sound. Active in dungeons, arenas and the open
+world; silent in raids and battlegrounds. The values live in `CCAlarmDB`.*
+
+## Entwickeln und Prüfen
 
 ```
-luac5.1 -p CCAlarm.lua tests/pruefstand.lua   # Syntax
-lua5.1 tests/pruefstand.lua                   # Verhalten
-python3 tools/check_toc.py                    # .toc gegen den Dateibestand
+luac5.1 -p CCAlarm.lua Locales.lua tests/pruefstand.lua   # Syntax
+lua5.1 tests/pruefstand.lua                                # Verhalten
+python3 tools/check_toc.py                                 # .toc gegen den Dateibestand
+tools/package.sh                                           # dist/CCAlarm-<version>.zip
 ```
 
-Dieselben drei Schritte laufen als GitHub-Action bei jedem Push.
-`check_toc.py` fängt zwei Fehler ab, die sonst erst im Spiel auffallen — eine
-gelistete Datei fehlt (Addon lädt nicht) oder eine Lua-Datei liegt da, ohne
-geladen zu werden (stiller Blindgänger) — und erinnert an die Interface-Version
-beim nächsten Patch. Alle drei Alarmpfade sind an erfundenen Fehlern nachgewiesen.
+Dieselben Schritte laufen als GitHub-Action bei jedem Push.
 
-Stellt die WoW-API nach und prüft **beide Richtungen** — 15 Prüfungen:
-dass alarmiert wird (Heiler, Tank, Ton, genau einmal pro Aura) und dass **nicht**
-alarmiert wird (Schadensausteiler, unbekannter Zauber, zu kurze Aura, toter
-Heiler, Schlachtzug, abgeschaltet). Der erste Lauf fand einen echten Fehler:
-ohne `auraInstanceID` blieb der Ton aus.
+Der **Prüfstand stellt die WoW-API nach**, sodass sich das Addon ohne WoW prüfen
+lässt. Er prüft ausdrücklich **beide Richtungen** — dass alarmiert wird *und*
+dass es still bleibt: bei Schadensausteilern, unbekannten Zaubern, zu kurzen
+Auren, totem Heiler, im Schlachtzug und im abgeschalteten Zustand. Sein erster
+Lauf fand einen echten Fehler: ohne `auraInstanceID` blieb der Ton aus.
 
-*CCAlarm warns loudly when the healer or tank is crowd-controlled — the
-replacement for MiniAuras' `HealerCrowdControl`, extended to tanks. Detecting CC
-on other players is not straightforward in Midnight: the combat log event is
-gone, no aura API classifies crowd control, and `C_LossOfControl` only reports on
-the player. The addon therefore works from a spell-ID list that it **learns**
-rather than guesses: `LOSS_OF_CONTROL_ADDED` fires for the player with
-Blizzard's own `locType` classification, and what hits you in a dungeon also hits
-the healer and tank, so the list fills itself through play and then covers the
-whole group. Auras seen on the healer or tank that are not yet known are
-recorded as candidates to be promoted with a command. `SCHOOL_INTERRUPT` and
-`DISARM` are deliberately never learned. Slash commands are listed above;
-`/ccalarm test` proves placement and sound without waiting for real crowd
-control. The display reproduces the sizes that were configured in MiniAuras. The
-offline test harness stubs the WoW API and checks both directions — that the
-alarm fires and that it stays silent when it should — 15 assertions, and its
-first run found a real bug where the sound was skipped for auras without an
-`auraInstanceID`.*
+`check_toc.py` fängt zwei Fehler ab, die sonst erst im Spiel auffallen: eine in
+der `.toc` gelistete, aber fehlende Datei (das Addon lädt gar nicht) und eine
+Lua-Datei, die im Repo liegt, ohne geladen zu werden (stiller Blindgänger).
+
+*The test harness stubs the WoW API so the addon can be checked without the game,
+and it asserts both directions — that the alarm fires and that it stays silent
+for damage dealers, unknown spells, sub-second auras, a dead healer, raid
+instances and when switched off. Its first run found a real bug where the sound
+was skipped for auras without an `auraInstanceID`. `check_toc.py` catches two
+mistakes that would otherwise only surface in game: a file listed in the `.toc`
+that does not exist (the addon fails to load at all) and a Lua file present in
+the repository that is never loaded.*
+
+## Veröffentlichen
+
+Ein Tag `v<version>` baut das Zip und legt eine GitHub-Release an. Der Workflow
+bricht ab, wenn Tag und `## Version` in der `.toc` auseinanderlaufen oder eine
+Prüfung rot ist.
+
+*A `v<version>` tag builds the zip and creates a GitHub release; the workflow
+refuses to publish when the tag and the `.toc` version disagree or any check
+fails.*
+
+## Lizenz
+
+MIT — siehe [`LICENSE`](LICENSE).

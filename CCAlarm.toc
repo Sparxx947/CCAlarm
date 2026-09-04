@@ -1,9 +1,13 @@
 ## Interface: 120100
 ## Title: CC|cffff3333Alarm|r
-## Notes: Warnt gross und laut, wenn Heiler oder Tank in Kontrollverlust geraten.
-## Notes-deDE: Warnt gross und laut, wenn Heiler oder Tank in Kontrollverlust geraten.
-## Author: Jens (mit Claude Code)
+## Notes: Warns when the healer or tank is crowd-controlled. Learns the spells from Blizzard's own loss-of-control data.
+## Notes-deDE: Warnt, wenn Heiler oder Tank in Kontrollverlust geraten. Lernt die Zauber aus Blizzards eigener Einstufung.
+## Author: jfstn
 ## Version: 1.0.0
+## X-Category: Combat
+## X-License: MIT
+## X-Website: https://github.com/Sparxx947/CCAlarm
 ## SavedVariables: CCAlarmDB
 
+Locales.lua
 CCAlarm.lua

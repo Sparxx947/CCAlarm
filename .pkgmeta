@@ -1,0 +1,12 @@
+# Metadaten fuer den CurseForge/WoWInterface-Packager.
+# package-as bestimmt den Ordnernamen im Zip -- er MUSS dem .toc-Namen
+# entsprechen, sonst laedt WoW das Addon nicht.
+package-as: CCAlarm
+
+enable-nolib-creation: no
+
+ignore:
+  - tests
+  - tools
+  - .github
+  - CHANGELOG.md

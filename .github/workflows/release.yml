@@ -1,0 +1,41 @@
+name: Release
+
+# Ein Tag "v<version>" baut das Zip und haengt es an eine GitHub-Release.
+# Der Bau prueft selbst, dass genau ein Ordner "CCAlarm" im Zip liegt --
+# ein falscher Ordnername ist der haeufigste Grund, warum ein Addon beim
+# Nutzer nicht laedt.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Lua 5.1 installieren
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq lua5.1
+      - name: Nicht ohne gruene Pruefungen ausliefern
+        run: |
+          luac5.1 -p CCAlarm.lua Locales.lua tests/pruefstand.lua
+          lua5.1 tests/pruefstand.lua
+          python3 tools/check_toc.py
+      - name: Tag und .toc-Version muessen uebereinstimmen
+        run: |
+          toc="$(grep -m1 '^## Version:' CCAlarm.toc | sed 's/^## Version:[[:space:]]*//' | tr -d '\r')"
+          tag="${GITHUB_REF_NAME#v}"
+          if [ "$toc" != "$tag" ]; then
+            echo "Tag $tag passt nicht zur .toc-Version $toc" >&2
+            exit 1
+          fi
+      - name: Paket bauen
+        run: tools/package.sh
+      - name: Release anlegen
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.zip
+          body_path: CHANGELOG.md

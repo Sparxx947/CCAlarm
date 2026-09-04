@@ -22,6 +22,22 @@ jobs:
       - name: Pruefstand
         run: lua5.1 tests/pruefstand.lua
 
+  privacy:
+    name: Keine personenbezogenen Spuren
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Auf Pfade, Konto-, Realm- und Charakternamen pruefen
+        run: python3 tools/check_privacy.py
+
+  package:
+    name: Paket baut und ist sauber
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Zip bauen und Aufbau pruefen
+        run: tools/package.sh
+
   toc:
     name: .toc passt zum Spielstand
     runs-on: ubuntu-latest

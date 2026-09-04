@@ -17,13 +17,34 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Voller Verlauf: ohne ihn hat die Vorfahrenpruefung unten keine
+          # gemeinsame Basis mit main und schluege immer fehl.
+          fetch-depth: 0
       - name: Lua 5.1 installieren
         run: sudo apt-get update -qq && sudo apt-get install -y -qq lua5.1
+      # Ein Release darf nie schwaecher geprueft sein als ein gewoehnlicher Push.
+      # Vorher liefen hier drei von sieben Gattern -- und die Syntaxpruefung
+      # liess Config.lua und die Saatliste aus.
       - name: Nicht ohne gruene Pruefungen ausliefern
         run: |
-          luac5.1 -p CCAlarm.lua Locales.lua tests/pruefstand.lua
+          luac5.1 -p CCAlarm.lua Locales.lua Config.lua Data/CCSpells.lua tests/pruefstand.lua
           lua5.1 tests/pruefstand.lua
+          python3 tools/check_scope.py
           python3 tools/check_toc.py
+          python3 tools/check_selfcontained.py
+          python3 tools/check_locales.py
+          python3 tools/check_privacy.py
+      # Stehende Regel: der Tag gehoert auf den Merge-Commit auf main, nicht auf
+      # die Zweigspitze, die geprueft wurde. Heruntergeladen wird am Ende, was
+      # auf main gelandet ist -- also hier nachweisen, dass genau das getaggt ist.
+      - name: Tag muss auf main liegen
+        run: |
+          git fetch origin main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "Der Tag zeigt auf einen Commit, der nicht auf main liegt." >&2
+            exit 1
+          fi
       - name: Tag und .toc-Version muessen uebereinstimmen
         run: |
           toc="$(grep -m1 '^## Version:' CCAlarm.toc | sed 's/^## Version:[[:space:]]*//' | tr -d '\r')"
@@ -34,8 +55,11 @@ jobs:
           fi
       - name: Paket bauen
         run: tools/package.sh
+      # Nur der Abschnitt dieser Fassung, nicht der ganze Changelog.
+      - name: Releasetext erzeugen
+        run: python3 tools/release_notes.py "${GITHUB_REF_NAME}" dist/release-notes.md
       - name: Release anlegen
         uses: softprops/action-gh-release@v2
         with:
           files: dist/*.zip
-          body_path: CHANGELOG.md
+          body_path: dist/release-notes.md

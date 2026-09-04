@@ -1,0 +1,31 @@
+name: Checks
+
+# Laeuft bei jedem Push und Pull Request, damit ein Fehler dort auffaellt, wo er
+# billig zu beheben ist. Dieselben Schritte laufen lokal:
+#   luac5.1 -p CCAlarm.lua && lua5.1 tests/pruefstand.lua
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  lua:
+    name: Lua-Syntax und Pruefstand
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Lua 5.1 installieren
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq lua5.1
+      - name: Syntax pruefen
+        run: luac5.1 -p CCAlarm.lua tests/pruefstand.lua
+      - name: Pruefstand
+        run: lua5.1 tests/pruefstand.lua
+
+  toc:
+    name: .toc passt zum Spielstand
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Interface-Version und Dateiliste pruefen
+        run: python3 tools/check_toc.py

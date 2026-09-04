@@ -1,0 +1,9 @@
+## Interface: 120100
+## Title: CC|cffff3333Alarm|r
+## Notes: Warnt gross und laut, wenn Heiler oder Tank in Kontrollverlust geraten.
+## Notes-deDE: Warnt gross und laut, wenn Heiler oder Tank in Kontrollverlust geraten.
+## Author: Jens (mit Claude Code)
+## Version: 1.0.0
+## SavedVariables: CCAlarmDB
+
+CCAlarm.lua

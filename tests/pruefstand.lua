@@ -523,5 +523,32 @@ handler(addon, "UNIT_AURA", "party1")
 pruefe("CC auf dem Heiler spielt den Heiler-Ton", gespielt == SOUNDKIT.RAID_WARNING)
 PlaySound = altesPlaySound
 
+echtesPrint("\n=== 13. Probealarm (der Fehler vom 04.09.) ===\n")
+-- ns.Test war nie aufgerufen worden. Im Spiel scheiterte es 27-mal, weil
+-- ns.Test vor der Deklaration von show stand und damit auf ein globales,
+-- leeres show zugriff. Ein Aufruf haette es sofort gezeigt.
+ruecksetzen()
+CCAlarmDB.locked = true
+local ok, fehler = pcall(ns.Test)
+pruefe("ns.Test laeuft ohne Fehler", ok)
+if not ok then echtesPrint("      " .. tostring(fehler) .. "\n") end
+pruefe("Probealarm macht die Anzeige sichtbar", anzeigeSichtbar())
+pruefe("Probealarm spielt einen Ton", Toene >= 1)
+
+ruecksetzen()
+Toene = 0
+local ok2 = pcall(SlashCmdList.CCALARM, "test")
+pruefe("/ccalarm test laeuft ohne Fehler", ok2)
+pruefe("/ccalarm test macht die Anzeige sichtbar", anzeigeSichtbar())
+
+-- Auch der Knopf im Optionsfenster fuehrt dorthin
+ruecksetzen()
+local getroffen = false
+for _, k in ipairs(knoepfe) do
+    local fn = k:GetScript("OnClick")
+    if fn then local o = pcall(fn); getroffen = getroffen or o end
+end
+pruefe("kein Knopf im Optionsfenster wirft einen Fehler", getroffen)
+
 echtesPrint(("\n%d bestanden, %d gescheitert\n\n"):format(bestanden, gescheitert))
 os.exit(gescheitert == 0 and 0 or 1)

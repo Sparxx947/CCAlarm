@@ -3,7 +3,7 @@
 ## Notes: Warns when the healer or tank is crowd-controlled. Learns the spells from Blizzard's own loss-of-control data.
 ## Notes-deDE: Warnt, wenn Heiler oder Tank in Kontrollverlust geraten. Lernt die Zauber aus Blizzards eigener Einstufung.
 ## Author: Sparxx947
-## Version: 0.2.2
+## Version: 0.2.3
 ## X-Curse-Project-ID: 1681787
 ## X-Category: Combat
 ## X-License: MIT

@@ -34,6 +34,10 @@ L["MSG_REMOVED"]       = "%d removed."
 L["MSG_CLEARED"]       = "candidate list cleared."
 L["MSG_NEED_ID"]       = "usage: /ccalarm %s <spellID>"
 L["MSG_UNKNOWN"]       = "unknown: %s -- try /ccalarm help"
+-- Shown once per instance while Blizzard keeps auras secret. It names the
+-- reason and the way out, because a warner that falls silent without saying so
+-- is worse than no warner at all.
+L["MSG_AURAS_SECRET"]  = "auras are secret here (Mythic+/PvP): Blizzard blocks addons from reading other players' auras, so no warning can be given until you leave."
 L["ROLE_HEALER_SHORT"] = "healer "
 L["ROLE_TANK_SHORT"]   = "tank"
 
@@ -107,6 +111,7 @@ if GetLocale() == "deDE" then
     L["MSG_CLEARED"]       = "Kandidatenliste geleert."
     L["MSG_NEED_ID"]       = "Aufruf: /ccalarm %s <Zauber-ID>"
     L["MSG_UNKNOWN"]       = "unbekannt: %s -- /ccalarm hilfe"
+    L["MSG_AURAS_SECRET"]  = "Auren sind hier geheim (Mythic+/PvP): Blizzard sperrt Addons das Auslesen fremder Auren, bis zum Verlassen ist keine Warnung moeglich."
     L["ROLE_HEALER_SHORT"] = "Heiler "
     L["ROLE_TANK_SHORT"]   = "Tank"
 

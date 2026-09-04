@@ -66,14 +66,31 @@ def pruefe_historie() -> int:
             # Reste von filter-branch tragen die alte Angabe sonst unbemerkt
             # weiter und wandern beim naechsten "push --all" doch nach draussen.
             ["git", "-C", str(WURZEL), "log", "--all",
-             "--format=%an <%ae>%n%cn <%ce>"],
+             "--format=%an <%ae>%n%cn <%ce>%n%B"],
             capture_output=True, text=True, check=True)
     except (subprocess.CalledProcessError, FileNotFoundError):
         print("  (kein Git-Verlauf pruefbar)", file=sys.stderr)
         return 0
-    fremde = {z.strip() for z in lauf.stdout.splitlines() if z.strip()} - ERLAUBTE_AUTOREN
+    zeilen = [z.strip() for z in lauf.stdout.splitlines() if z.strip()]
+
+    # Autorzeilen haben die Form "Name <adresse>"; alles andere ist Commit-Text.
+    autoren = {z for z in zeilen if z.endswith(">") and " <" in z}
+    fremde = autoren - ERLAUBTE_AUTOREN
     for autor in sorted(fremde):
         print(f"Historie: unerwarteter Autor {autor}", file=sys.stderr)
+
+    # Auch der TEXT eines Commits kann eine Identitaet tragen: GitHub haengt
+    # beim Squash-Merge eine "Co-authored-by:"-Zeile mit der Adresse des
+    # Zweig-Autors an. Die ueberlebt jedes Umschreiben der Autorfelder.
+    for muster, was in MUSTER:
+        for treffer in set(re.findall(muster, lauf.stdout)):
+            wort = treffer if isinstance(treffer, str) else treffer[0]
+            if was in ("Name mit Sonderzeichen", "Realmname"):
+                continue
+            if any(wort in a for a in ERLAUBTE_AUTOREN):
+                continue
+            print(f"Historie: {was} im Commit-Text: {wort}", file=sys.stderr)
+            fremde = fremde | {wort}
     if fremde:
         print("  Hinweis: eine bereits nach GitHub gepushte Angabe bleibt ueber\n"
               "  refs/pull/<nr>/head erreichbar, auch nachdem der Zweig geloescht\n"

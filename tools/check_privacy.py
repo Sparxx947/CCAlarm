@@ -19,7 +19,9 @@ WURZEL = pathlib.Path(__file__).resolve().parent.parent
 UEBERSPRINGEN = {".git", "dist", "__pycache__", "Libs", ".cache"}
 # Diese Datei enthaelt die Suchmuster selbst -- wuerde sie sich mitpruefen,
 # meldete sie bei jedem Lauf ihre eigenen Realmnamen und waere wertlos.
-NICHT_PRUEFEN = {"tools/check_privacy.py"}
+NICHT_PRUEFEN = {"tools/check_privacy.py", "tools/private_patterns.txt"}
+# Beide Dateien enthalten die Suchmuster selbst -- wuerden sie mitgeprueft,
+# meldete die Pruefung bei jedem Lauf sich selbst und waere wertlos.
 
 MUSTER = [
     (r"/home/[a-z][a-z0-9_-]*", "Pfad im Heimverzeichnis"),
@@ -27,7 +29,6 @@ MUSTER = [
     (r"\b[\w.+-]+@[\w-]+\.[\w.]+\b", "E-Mail-Adresse"),
     (r"steamapps/compatdata", "Steam-Installationspfad"),
     (r"\bDAVCON\b", "WoW-Kontoname"),
-    (r"\b(Blackhand|Antonidas|Nozdormu|Arygos|Blackrock)\b", "Realmname"),
     (r"[A-Za-zÀ-ÿ]*[îìíïîêéèôóòûúùàáâãñÿ][A-Za-zÀ-ÿ]{2,}", "Name mit Sonderzeichen"),
 ]
 
@@ -98,8 +99,28 @@ def pruefe_historie() -> int:
     return len(fremde)
 
 
+def zusatzmuster() -> list[tuple[str, str]]:
+    """Eigene Suchmuster aus einer lokalen, nicht eingecheckten Datei.
+
+    Realm- und Charakternamen gehoeren nicht ins oeffentliche Repo -- sie
+    verraten, wo jemand spielt. Wer die Pruefung darauf ausdehnen will, legt
+    tools/private_patterns.txt an (eine Zeile je Muster). Die Datei steht in
+    .gitignore.
+    """
+    datei = WURZEL / "tools" / "private_patterns.txt"
+    if not datei.exists():
+        return []
+    muster = []
+    for zeile in datei.read_text(encoding="utf-8").splitlines():
+        zeile = zeile.strip()
+        if zeile and not zeile.startswith("#"):
+            muster.append((zeile, "eigenes Muster"))
+    return muster
+
+
 def main() -> int:
     funde = pruefe_historie()
+    MUSTER.extend(zusatzmuster())
     for pfad in sorted(WURZEL.rglob("*")):
         if not pfad.is_file():
             continue

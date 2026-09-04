@@ -1,5 +1,34 @@
 # Changelog
 
+## 1.2.0 — 2026-09-04
+
+Ein eigener Ton je Rolle — und ein Fehler behoben, den das Einbetten der
+Bibliothek erst geschaffen hatte.
+
+- **Getrennte Alarmtöne für Heiler und Tank.** So hört man ohne hinzusehen, wen
+  es getroffen hat. Beide im Optionsfenster wählbar, jeder mit eigenem
+  Anhörknopf. Fehlt ein Eintrag, greift der allgemeine Ton — ältere
+  Konfigurationen laufen also weiter.
+- ★ **Behoben: Die Tonliste wäre auf einer Einzelinstallation leer gewesen.**
+  LibSharedMedia meldet von sich aus genau *einen* Ton an („None"). Seit die
+  Bibliothek eingebettet ist, wurde ausschließlich deren Liste genutzt — der
+  eingebaute Rückfall griff nur noch, wenn sie fehlte, also nie. Beide Listen
+  werden jetzt **zusammengeführt**: Die eingebauten Schriften und Töne stehen
+  immer zur Wahl, Medien anderer Addons kommen hinzu.
+- Acht eingebaute Töne statt vier, alle über `SOUNDKIT` angesprochen und damit
+  ohne Datei verfügbar.
+- **57 → 69 Prüfungen**, darunter der ganze Weg: CC auf dem Tank spielt den
+  Tank-Ton, CC auf dem Heiler den Heiler-Ton.
+
+*Separate alarm sounds for healer and tank, each selectable with its own preview
+button, falling back to the general sound when unset. Fixes a bug introduced by
+embedding LibSharedMedia: the library registers exactly one sound of its own
+("None"), and since embedding it the code used only its list, so the sound
+selection would have been empty on an installation with no other addons. Both
+lists are now merged, so the built-ins are always offered and other addons' media
+are added on top. Eight built-in sounds instead of four, all addressed through
+SOUNDKIT. 57 → 69 assertions.*
+
 ## 1.1.1 — 2026-09-04
 
 Die Schriftwahl war schon da — jetzt ist auch belegt, dass sie ankommt.

@@ -48,8 +48,10 @@ local DEFAULTS = {
     relativePoint = "TOP",
     offsetX       = 0,
     locked        = true,
-    -- Sound: LibSharedMedia name when available, otherwise the SOUNDKIT entry.
+    -- Sound. soundName is the general one; sounds[role] overrides it per role,
+    -- so healer and tank can be told apart without looking at the screen.
     soundName     = "Raid Warning",
+    sounds        = { HEALER = "Raid Warning", TANK = "Ready Check" },
     soundKit      = "RAID_WARNING",
     inDungeon     = true,
     inArena       = true,
@@ -90,13 +92,23 @@ local BUILTIN_FONTS = {
     ["Skurri"]           = "Fonts\\skurri.ttf",
 }
 
--- Sounds that ship with the client. The SOUNDKIT entries are all in active use
--- by other addons, so they are known to exist rather than assumed.
+-- Sounds that ship with the client, addressed through SOUNDKIT rather than as
+-- files. Every entry here is in active use by other addons, so these are known
+-- to exist rather than assumed.
+--
+-- These are ALWAYS offered, even when LibSharedMedia is present: the library
+-- itself registers exactly one sound ("None"), so relying on it alone would
+-- leave the selection empty on an installation with no other addons -- a
+-- setting that exists but cannot do anything.
 local BUILTIN_SOUNDS = {
-    ["Raid Warning"]  = "RAID_WARNING",
-    ["Ready Check"]   = "READY_CHECK",
-    ["Boss Whisper"]  = "UI_RAID_BOSS_WHISPER_WARNING",
-    ["Map Ping"]      = "UI_MAP_WAYPOINT_CHAT_SHARE",
+    ["Raid Warning"]   = "RAID_WARNING",
+    ["Ready Check"]    = "READY_CHECK",
+    ["Boss Whisper"]   = "UI_RAID_BOSS_WHISPER_WARNING",
+    ["Map Ping"]       = "UI_MAP_WAYPOINT_CHAT_SHARE",
+    ["Waypoint Gone"]  = "UI_MAP_WAYPOINT_REMOVE",
+    ["Invite Refused"] = "IG_PLAYER_INVITE_DECLINE",
+    ["Menu Open"]      = "IG_MAINMENU_OPEN",
+    ["Tab"]            = "IG_CHARACTER_INFO_TAB",
 }
 
 local function lsm()
@@ -105,45 +117,52 @@ end
 ns.LSM = lsm
 
 -- Sorted list of selectable font names, plus the resolved path for each.
-function ns.FontList()
-    local names, paths = {}, {}
-    local media = lsm()
-    if media then
-        for _, name in ipairs(media:List("font")) do
-            names[#names + 1] = name
-            paths[name] = media:Fetch("font", name)
-        end
-    else
-        for name, path in pairs(BUILTIN_FONTS) do
-            names[#names + 1] = name
-            paths[name] = path
-        end
+-- Both lists MERGE the built-ins with whatever the library knows, rather than
+-- choosing one source. Picking only the library would empty the sound list on a
+-- lone installation; picking only the built-ins would throw away every font and
+-- sound the player's other addons provide.
+local function merge(builtin, mediatype)
+    local seen, names = {}, {}
+    for name in pairs(builtin) do
+        seen[name] = true
+        names[#names + 1] = name
     end
-    table.sort(names)
-    return names, paths
-end
-
-function ns.SoundList()
-    local names = {}
     local media = lsm()
     if media then
-        for _, name in ipairs(media:List("sound")) do names[#names + 1] = name end
-    else
-        for name in pairs(BUILTIN_SOUNDS) do names[#names + 1] = name end
+        for _, name in ipairs(media:List(mediatype) or {}) do
+            if not seen[name] then
+                seen[name] = true
+                names[#names + 1] = name
+            end
+        end
     end
     table.sort(names)
     return names
 end
 
+function ns.FontList()
+    local names = merge(BUILTIN_FONTS, "font")
+    local paths, media = {}, lsm()
+    for _, name in ipairs(names) do
+        paths[name] = BUILTIN_FONTS[name]
+                      or (media and media:Fetch("font", name, true))
+    end
+    return names, paths
+end
+
+function ns.SoundList()
+    return merge(BUILTIN_SOUNDS, "sound")
+end
+
 -- Resolve the configured font to a usable path. Falls back step by step rather
 -- than returning nil, because SetFont with a nil path throws.
 local function fontPath()
+    if db.fontName and BUILTIN_FONTS[db.fontName] then return BUILTIN_FONTS[db.fontName] end
     local media = lsm()
     if media and db.fontName then
         local path = media:Fetch("font", db.fontName, true)
         if path then return path end
     end
-    if db.fontName and BUILTIN_FONTS[db.fontName] then return BUILTIN_FONTS[db.fontName] end
     return db.fontPath or "Fonts\\FRIZQT__.TTF"
 end
 ns.FontPath = fontPath
@@ -292,7 +311,7 @@ function ns.GetDB() return db end
 function ns.Test()
     local aura = { icon = 136071, duration = 5, expirationTime = GetTime() + 5 }
     show({ { name = UnitName("player") or "Test", role = "HEALER", aura = aura } })
-    if db.sound then ns.PlayAlarm() end
+    if db.sound then ns.PlayAlarm("HEALER") end
     C_Timer.After(5, function()
         if display then
             display.shownByAlarm = false
@@ -301,12 +320,25 @@ function ns.Test()
     end)
 end
 
--- One place that decides what an alarm sounds like.
-function ns.PlayAlarm()
+-- Which sound belongs to a role. Falls back to the general one, so an older
+-- saved configuration without per-role entries keeps working.
+function ns.SoundForRole(role)
+    return (role and db.sounds and db.sounds[role]) or db.soundName
+end
+
+-- One place that decides what an alarm sounds like. Built-in SOUNDKIT entries
+-- are checked first: they are addressed by constant and always available, while
+-- a library sound is a file that may have gone away with the addon providing it.
+function ns.PlayAlarm(role)
+    local name = ns.SoundForRole(role)
+    if name and BUILTIN_SOUNDS[name] and SOUNDKIT[BUILTIN_SOUNDS[name]] then
+        PlaySound(SOUNDKIT[BUILTIN_SOUNDS[name]], "Master")
+        return
+    end
     local media = lsm()
-    if media and db.soundName then
-        local file = media:Fetch("sound", db.soundName, true)
-        if file then PlaySoundFile(file, "Master"); return end
+    if media and name then
+        local file = media:Fetch("sound", name, true)
+        if file and file ~= 1 then PlaySoundFile(file, "Master"); return end
     end
     PlaySound(SOUNDKIT[db.soundKit or "RAID_WARNING"] or SOUNDKIT.RAID_WARNING, "Master")
 end
@@ -444,7 +476,7 @@ local function scan()
                         local key = aura.auraInstanceID or (unit .. ":" .. id)
                         if not activeAlarms[key] then
                             activeAlarms[key] = true
-                            if db.sound then ns.PlayAlarm() end
+                            if db.sound then ns.PlayAlarm(role) end
                         end
                     end
                 elseif id and db.collect and not db.candidates[id] then

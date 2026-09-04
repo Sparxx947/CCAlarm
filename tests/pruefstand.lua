@@ -351,8 +351,20 @@ function LSM:Fetch(art, name)
 end
 LibStub = function(name) return name == "LibSharedMedia-3.0" and LSM or nil end
 
-pruefe("Schriftliste kommt aus der Bibliothek",
-       ns.FontList()[1] == "Meine Schrift")
+local function enthaelt(liste, gesucht)
+    for _, x in ipairs(liste) do if x == gesucht then return true end end
+    return false
+end
+pruefe("Schrift der Bibliothek steht in der Liste",
+       enthaelt(ns.FontList(), "Meine Schrift"))
+pruefe("eingebaute Schriften stehen WEITERHIN in der Liste",
+       enthaelt(ns.FontList(), "Morpheus"))
+pruefe("Ton der Bibliothek steht in der Liste",
+       enthaelt(ns.SoundList(), "Mein Ton"))
+-- Der eigentliche Fallstrick: LibSharedMedia meldet von sich aus nur "None" an.
+-- Ohne Zusammenfuehren waere die Tonliste auf einer Einzelinstallation leer.
+pruefe("eingebaute Toene stehen WEITERHIN in der Liste",
+       enthaelt(ns.SoundList(), "Raid Warning"))
 CCAlarmDB.fontName = "Meine Schrift"
 pruefe("Schrift der Bibliothek wird aufgeloest",
        ns.FontPath() == "Interface\\Meine.ttf")
@@ -449,9 +461,67 @@ if dick then
            CCAlarmDB.fontOutline == "THICKOUTLINE")
 end
 
+-- Auswahlfeld 3 und 4 sind die Toene fuer Heiler und Tank.
+pruefe("es gibt vier Auswahlfelder (Schrift, Umriss, zwei Toene)", #dropdowns >= 4)
+if #dropdowns >= 4 then
+    local heilerMenue = menueAuslesen(dropdowns[3])
+    local tankMenue   = menueAuslesen(dropdowns[4])
+    local function finde(liste, text)
+        for _, e in ipairs(liste) do if e.text == text then return e end end
+    end
+    local e1, e2 = finde(heilerMenue, "Boss Whisper"), finde(tankMenue, "Map Ping")
+    pruefe("Heiler-Tonmenue bietet die eingebauten Toene an", e1 ~= nil)
+    pruefe("Tank-Tonmenue ebenso", e2 ~= nil)
+    if e1 and e2 then
+        e1.setzen(); e2.setzen()
+        pruefe("Klick setzt den Heiler-Ton", CCAlarmDB.sounds.HEALER == "Boss Whisper")
+        pruefe("Klick setzt den Tank-Ton getrennt davon", CCAlarmDB.sounds.TANK == "Map Ping")
+        pruefe("die beiden Felder haben sich nicht gegenseitig ueberschrieben",
+               CCAlarmDB.sounds.HEALER ~= CCAlarmDB.sounds.TANK)
+    end
+end
+CCAlarmDB.sounds = { HEALER = "Raid Warning", TANK = "Ready Check" }
+
 CCAlarmDB.fontName = "Friz Quadrata TT"
 CCAlarmDB.fontOutline = "OUTLINE"
 ns.ApplyDisplay()
+
+echtesPrint("\n=== 12. Ein eigener Ton je Rolle ===\n")
+ruecksetzen()
+CCAlarmDB.sounds = { HEALER = "Raid Warning", TANK = "Ready Check" }
+pruefe("Heiler hat seinen eigenen Ton", ns.SoundForRole("HEALER") == "Raid Warning")
+pruefe("Tank hat einen anderen", ns.SoundForRole("TANK") == "Ready Check")
+pruefe("ohne Rolle greift der allgemeine Ton", ns.SoundForRole(nil) == CCAlarmDB.soundName)
+CCAlarmDB.sounds.TANK = nil
+pruefe("fehlender Rolleneintrag faellt auf den allgemeinen zurueck",
+       ns.SoundForRole("TANK") == CCAlarmDB.soundName)
+CCAlarmDB.sounds.TANK = "Ready Check"
+
+-- Welcher SOUNDKIT-Eintrag tatsaechlich gespielt wird, wird mitgeschrieben.
+local gespielt
+local altesPlaySound = PlaySound
+PlaySound = function(id) gespielt = id; Toene = Toene + 1 end
+ns.PlayAlarm("HEALER")
+pruefe("Heiler-Alarm spielt RAID_WARNING", gespielt == SOUNDKIT.RAID_WARNING)
+ns.PlayAlarm("TANK")
+pruefe("Tank-Alarm spielt READY_CHECK", gespielt == SOUNDKIT.READY_CHECK)
+pruefe("die beiden Toene sind wirklich verschieden",
+       SOUNDKIT.RAID_WARNING ~= SOUNDKIT.READY_CHECK)
+
+-- Und der Weg aus dem Kampf heraus: der Treffer bestimmt die Rolle.
+ruecksetzen()
+gespielt = nil
+Welt.auren.party2 = { { spellId = 4321, duration = 4, expirationTime = 1004, icon = 1,
+                        name = "B", auraInstanceID = 77 } }
+handler(addon, "UNIT_AURA", "party2")
+pruefe("CC auf dem Tank spielt den Tank-Ton", gespielt == SOUNDKIT.READY_CHECK)
+ruecksetzen()
+gespielt = nil
+Welt.auren.party1 = { { spellId = 4321, duration = 4, expirationTime = 1004, icon = 1,
+                        name = "B", auraInstanceID = 78 } }
+handler(addon, "UNIT_AURA", "party1")
+pruefe("CC auf dem Heiler spielt den Heiler-Ton", gespielt == SOUNDKIT.RAID_WARNING)
+PlaySound = altesPlaySound
 
 echtesPrint(("\n%d bestanden, %d gescheitert\n\n"):format(bestanden, gescheitert))
 os.exit(gescheitert == 0 and 0 or 1)

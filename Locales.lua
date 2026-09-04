@@ -67,7 +67,8 @@ L["OPT_MAX_ICONS"]     = "Maximum icons"
 
 L["OPT_SOUND"]         = "Sound"
 L["OPT_PLAY_SOUND"]    = "Play a sound"
-L["OPT_SOUND_CHOICE"]  = "Alarm sound"
+L["OPT_SOUND_HEALER"]  = "Sound when the healer is hit"
+L["OPT_SOUND_TANK"]    = "Sound when the tank is hit"
 L["OPT_SOUND_TEST"]    = "Play"
 
 L["OPT_POSITION"]      = "Position"
@@ -137,7 +138,8 @@ if GetLocale() == "deDE" then
 
     L["OPT_SOUND"]         = "Ton"
     L["OPT_PLAY_SOUND"]    = "Ton abspielen"
-    L["OPT_SOUND_CHOICE"]  = "Alarmton"
+    L["OPT_SOUND_HEALER"]  = "Ton, wenn es den Heiler trifft"
+    L["OPT_SOUND_TANK"]    = "Ton, wenn es den Tank trifft"
     L["OPT_SOUND_TEST"]    = "Anhoeren"
 
     L["OPT_POSITION"]      = "Position"

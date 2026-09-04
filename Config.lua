@@ -247,13 +247,21 @@ local function build()
     checkbox(panel, L["OPT_PLAY_SOUND"], 16, y,
              function() return db.sound end,
              function(v) db.sound = v end); y = y - 26
-    local soundLabel = panel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
-    soundLabel:SetPoint("TOPLEFT", 20, y); soundLabel:SetText(L["OPT_SOUND_CHOICE"]); y = y - 20
-    dropdown(panel, 16, y, 220, ns.SoundList,
-             function() return db.soundName end,
-             function(v) db.soundName = v end)
-    button(panel, L["OPT_SOUND_TEST"], 246, y, 90, function() ns.PlayAlarm() end)
-    y = y - 40
+    -- Ein eigener Ton je Rolle: so hoert man ohne hinzusehen, wen es getroffen hat.
+    for _, eintrag in ipairs({
+        { rolle = "HEALER", text = L["OPT_SOUND_HEALER"] },
+        { rolle = "TANK",   text = L["OPT_SOUND_TANK"] },
+    }) do
+        local label = panel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+        label:SetPoint("TOPLEFT", 20, y); label:SetText(eintrag.text); y = y - 20
+        dropdown(panel, 16, y, 220, ns.SoundList,
+                 function() return db.sounds[eintrag.rolle] or db.soundName end,
+                 function(v) db.sounds[eintrag.rolle] = v end)
+        button(panel, L["OPT_SOUND_TEST"], 246, y, 90,
+               function() ns.PlayAlarm(eintrag.rolle) end)
+        y = y - 34
+    end
+    y = y - 6
 
     -- Position ---------------------------------------------------------------
     heading(panel, L["OPT_POSITION"], 16, y); y = y - 26

@@ -3,7 +3,7 @@
 ## Notes: Warns when the healer or tank is crowd-controlled. Learns the spells from Blizzard's own loss-of-control data.
 ## Notes-deDE: Warnt, wenn Heiler oder Tank in Kontrollverlust geraten. Lernt die Zauber aus Blizzards eigener Einstufung.
 ## Author: jfstn
-## Version: 1.1.1
+## Version: 1.2.0
 ## X-Category: Combat
 ## X-License: MIT
 ## X-Website: https://github.com/Sparxx947/CCAlarm

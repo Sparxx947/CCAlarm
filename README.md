@@ -63,6 +63,26 @@ candidates, listed by `/ccalarm candidates` for promotion.
 `SCHOOL_INTERRUPT` and `DISARM` are never learned: neither stops anyone from
 moving or healing.*
 
+## Töne
+
+Acht Töne bringt das Addon selbst mit — sie werden über `SOUNDKIT`
+angesprochen und brauchen keine Datei. Dazu kommt alles, was andere Addons bei
+LibSharedMedia angemeldet haben.
+
+**Heiler und Tank haben getrennte Töne.** Wer sie unterschiedlich wählt, hört
+ohne hinzusehen, wen es getroffen hat.
+
+⚠️ LibSharedMedia meldet von sich aus nur den Eintrag „None" an. Deshalb führt
+das Addon seine eigene Liste **immer** mit der der Bibliothek zusammen — sonst
+stünde auf einer Installation ohne weitere Addons nichts zur Wahl.
+
+*Eight sounds ship with the addon, addressed through `SOUNDKIT` so they need no
+files, and anything other addons registered with LibSharedMedia is added on top.
+Healer and tank have separate sounds, so you can tell who was hit without
+looking. Note that LibSharedMedia registers only "None" itself, which is why the
+addon always merges its own list with the library's — otherwise the selection
+would be empty on an installation with no other addons.*
+
 ## Abhängigkeiten: keine
 
 Das Addon bringt alles mit, was es braucht. `LibSharedMedia-3.0`,
@@ -107,7 +127,7 @@ mit `/ccalarm config`:
 |---|---|
 | Warntext | Schriftart, Größe (10–72), Farbe, Umriss (kein / dünn / dick) |
 | Symbole | anzeigen, Größe (16–96), Höchstzahl (1–10) |
-| Ton | an/aus, Auswahl aus allen bekannten Tönen, Knopf zum Anhören |
+| Ton | an/aus, **getrennter Ton für Heiler und Tank**, je mit Knopf zum Anhören |
 | Rollen | Heiler, Tank — einzeln |
 | Zonen | Dungeon, Arena, offene Welt, Schlachtzug, Schlachtfeld |
 | Position | **Lösen und ziehen**, festsetzen, zurücksetzen |

@@ -19,6 +19,13 @@ mkdir -p "$bau/CCAlarm"
 cp CCAlarm.toc CCAlarm.lua Locales.lua Config.lua LICENSE README.md "$bau/CCAlarm/"
 cp -r Libs Media Data "$bau/CCAlarm/"
 
+# Media/logo.png gehoert auf die CurseForge-Projektseite, nicht ins Spiel. Das
+# Kopieren oben nimmt Media als Ganzes, also muss es hier wieder raus -- sonst
+# laedt WoW bei jedem Nutzer eine 400x400-Datei mit, die es nie anzeigt.
+# Die .pkgmeta schliesst es ebenfalls aus, aber die gilt nur fuer den
+# CurseForge-Packager; dieses Skript baut das Zip fuer die GitHub-Release.
+rm -f "$bau/CCAlarm/Media/logo.png"
+
 mkdir -p dist
 ziel="dist/CCAlarm-$version.zip"
 rm -f "$ziel"
@@ -28,6 +35,13 @@ rm -f "$ziel"
 oben="$(unzip -Z1 "$ziel" | cut -d/ -f1 | sort -u)"
 [ "$oben" = "CCAlarm" ] || { echo "Zip-Aufbau falsch: '$oben'" >&2; exit 1; }
 unzip -Z1 "$ziel" | grep -qx "CCAlarm/CCAlarm.toc" || { echo ".toc fehlt im Zip" >&2; exit 1; }
+
+# Und die Gegenrichtung: das Projektlogo darf NICHT drin sein. Eine Pruefung,
+# die nur das Vorhandensein prueft, haette das Weglassen nie bemerkt.
+if unzip -Z1 "$ziel" | grep -qx "CCAlarm/Media/logo.png"; then
+  echo "logo.png liegt im Zip -- es gehoert nur auf die Projektseite" >&2
+  exit 1
+fi
 
 # Jede in der .toc geladene Datei muss auch im Zip liegen -- sonst laedt das
 # Addon beim Nutzer nur halb, was schwerer zu finden ist als gar nicht zu laden.

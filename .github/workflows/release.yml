@@ -22,6 +22,14 @@ jobs:
     # Bedingung `if: secrets.CF_API_TOKEN != ''` waere nie wahr geworden, und
     # der Upload waere stillschweigend nie gelaufen.
     env:
+      # BEIDE Namen, und das ist kein Guertel-und-Hosentraeger, sondern noetig:
+      # packager@v2 (SHA 6d50adb) liest AUSSCHLIESSLICH CF_API_KEY --
+      #   [ -z "$cf_token" ] && cf_token=$CF_API_KEY
+      # Erst master nimmt zusaetzlich CF_API_TOKEN an, und genau das beschreibt
+      # die aktuelle Doku. Mit nur CF_API_TOKEN blieb der Token leer und der
+      # Upload stieg lautlos aus (Issue #20). CF_API_TOKEN bleibt stehen, damit
+      # ein spaeterer Sprung auf eine neuere Packager-Fassung nichts bricht.
+      CF_API_KEY: ${{ secrets.CF_API_TOKEN }}
       CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
     steps:
       - uses: actions/checkout@v4
@@ -82,6 +90,22 @@ jobs:
       # Die Bedingung haelt ein Release am Leben, solange der Token noch fehlt:
       # ohne CF_API_TOKEN wuerde der Schritt scheitern und ein sonst fehlerfreies
       # Release an der letzten Zeile umkippen.
+      # Der Riegel gegen den stillen Fehlschlag aus Issue #20. upload_curseforge()
+      # kehrt bei leerem oder unbrauchbarem Token mit `return 0` zurueck -- ohne
+      # Meldung, ohne Fehlercode. Der Release sah vollstaendig aus, und bei den
+      # Nutzern kam nichts an. Deshalb wird der Token vorher geprueft: Ein
+      # Release, das nicht ausliefern kann, soll laut scheitern.
+      - name: CurseForge-Token pruefen
+        if: env.CF_API_KEY != ''
+        run: |
+          antwort=$(curl -sS -H "x-api-token: $CF_API_KEY" \
+                    "https://wow.curseforge.com/api/game/wow/versions")
+          if [ -z "$antwort" ] || [[ "$antwort" == *errorMessage* ]]; then
+            echo "CurseForge lehnt den Token ab:" >&2
+            echo "$antwort" | head -c 400 >&2
+            exit 1
+          fi
+          echo "Token gilt, CurseForge kennt $(echo "$antwort" | jq 'length') Spielversionen."
       - name: Zu CurseForge hochladen
-        if: env.CF_API_TOKEN != ''
+        if: env.CF_API_KEY != ''
         uses: BigWigsMods/packager@v2

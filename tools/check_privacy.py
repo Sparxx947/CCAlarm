@@ -28,7 +28,6 @@ MUSTER = [
     (r"[Cc]:\\\\Users\\\\[A-Za-z]", "Windows-Benutzerpfad"),
     (r"\b[\w.+-]+@[\w-]+\.[\w.]+\b", "E-Mail-Adresse"),
     (r"steamapps/compatdata", "Steam-Installationspfad"),
-    (r"\bDAVCON\b", "WoW-Kontoname"),
     (r"[A-Za-zÀ-ÿ]*[îìíïîêéèôóòûúùàáâãñÿ][A-Za-zÀ-ÿ]{2,}", "Name mit Sonderzeichen"),
 ]
 

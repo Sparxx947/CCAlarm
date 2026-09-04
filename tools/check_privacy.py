@@ -16,7 +16,7 @@ WURZEL = pathlib.Path(__file__).resolve().parent.parent
 # Libs/ enthaelt unveraenderten Fremdcode; die Adressen darin sind
 # Urheberangaben der Autoren, nicht Spuren aus diesem Rechner. Sie werden
 # ausgelassen, aber im Bericht genannt, damit die Ausnahme sichtbar bleibt.
-UEBERSPRINGEN = {".git", "dist", "__pycache__", "Libs"}
+UEBERSPRINGEN = {".git", "dist", "__pycache__", "Libs", ".cache"}
 # Diese Datei enthaelt die Suchmuster selbst -- wuerde sie sich mitpruefen,
 # meldete sie bei jedem Lauf ihre eigenen Realmnamen und waere wertlos.
 NICHT_PRUEFEN = {"tools/check_privacy.py"}

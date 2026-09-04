@@ -306,19 +306,6 @@ end
 
 function ns.GetDB() return db end
 
--- Shown by the test button and by /ccalarm test. One implementation, so the
--- panel cannot drift from the command.
-function ns.Test()
-    local aura = { icon = 136071, duration = 5, expirationTime = GetTime() + 5 }
-    show({ { name = UnitName("player") or "Test", role = "HEALER", aura = aura } })
-    if db.sound then ns.PlayAlarm("HEALER") end
-    C_Timer.After(5, function()
-        if display then
-            display.shownByAlarm = false
-            if db.locked then display:Hide() end
-        end
-    end)
-end
 
 -- Which sound belongs to a role. Falls back to the general one, so an older
 -- saved configuration without per-role entries keeps working.
@@ -392,6 +379,25 @@ local function show(hits)
     for i = shown + 1, #frame.icons do frame.icons[i]:Hide() end
     frame.shownByAlarm = true
     frame:Show()
+end
+
+-- ACHTUNG Reihenfolge: ns.Test ruft show() auf, und show ist ein local. Stand
+-- diese Funktion vorher im Datei, war show dort noch nicht deklariert -- der
+-- Aufruf landete auf einer globalen Variable und damit auf nil. Genau das ist
+-- am 2026-09-04 im Spiel passiert (27 Vorfaelle). Alles, was show benutzt,
+-- gehoert hinter dessen Deklaration.
+-- Shown by the test button and by /ccalarm test. One implementation, so the
+-- panel cannot drift from the command.
+function ns.Test()
+    local aura = { icon = 136071, duration = 5, expirationTime = GetTime() + 5 }
+    show({ { name = UnitName("player") or "Test", role = "HEALER", aura = aura } })
+    if db.sound then ns.PlayAlarm("HEALER") end
+    C_Timer.After(5, function()
+        if display then
+            display.shownByAlarm = false
+            if db.locked then display:Hide() end
+        end
+    end)
 end
 
 -------------------------------------------------------------------------------

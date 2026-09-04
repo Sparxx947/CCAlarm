@@ -47,5 +47,7 @@ jobs:
         run: python3 tools/check_toc.py
       - name: Keine Fremdabhaengigkeiten
         run: python3 tools/check_selfcontained.py
+      - name: Gueltigkeitsbereiche (local vor Deklaration benutzt)
+        run: python3 tools/check_scope.py
       - name: Uebersetzungen gegen den Code
         run: python3 tools/check_locales.py

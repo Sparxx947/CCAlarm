@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.1.1 — 2026-09-04
+
+**Behoben: `/ccalarm test` scheiterte immer.**
+
+`ns.Test` stand im Quelltext **vor** `local function show` und griff damit auf
+eine globale Variable gleichen Namens zu — also auf `nil`. Im Spiel schlug das
+27-mal fehl (`attempt to call a nil value`), ohne dass Laden oder Syntaxprüfung
+etwas gemerkt hätten.
+
+- Der Prüfstand rief `ns.Test` **nie auf** — jetzt tut er es, ebenso
+  `/ccalarm test` und jeden Knopf des Optionsfensters. 75 → 81 Prüfungen.
+- Neues Gatter `check_scope.py`: meldet jeden Aufruf eines `local`, der erst
+  weiter unten deklariert wird. Am echten Fehler nachgewiesen.
+
+*Fixes `/ccalarm test`, which always failed: `ns.Test` sat above
+`local function show` and therefore resolved the name against the global
+environment, i.e. `nil` — 27 failures in game, invisible to loading and syntax
+checks alike. The harness had never called `ns.Test`; it now does, along with the
+slash command and every options-panel button (75 → 81 assertions), and a new
+`check_scope.py` gate reports any call to a `local` declared further down.*
+
 ## 0.1.0 — 2026-09-04
 
 Erste Fassung. Noch nichts davon war je veröffentlicht.

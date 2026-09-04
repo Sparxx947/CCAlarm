@@ -85,7 +85,11 @@ local function dropdown(parent, x, y, width, list, get, set)
                 function() set(entry); ns.ApplyDisplay(); menu:GenerateMenu() end)
         end
     end)
-    widgets[#widgets + 1] = function() menu:SetDefaultText(get() or "") end
+    -- SetDefaultText gibt es nicht auf jedem Client; ohne Absicherung
+    -- zerreisst das Aufbauen des Fensters.
+    widgets[#widgets + 1] = function()
+        if menu.SetDefaultText then menu:SetDefaultText(get() or "") end
+    end
     return menu
 end
 

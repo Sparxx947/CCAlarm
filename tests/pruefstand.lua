@@ -50,12 +50,18 @@ C_LossOfControl = {
     GetActiveLossOfControlData = function(i) return Welt.loc[i] end,
 }
 
+local function nix() end
+
 local function neuerRahmen()
     local f = {}
-    local function nix() end
-    f.SetSize, f.ClearAllPoints, f.SetFrameStrata = nix, nix, nix
+    f.SetSize = function(self, b, h) self.breite, self.hoehe = b, h end
+    f.ClearAllPoints, f.SetFrameStrata = nix, nix
     f.RegisterEvent, f.UnregisterEvent = nix, nix
-    f.SetFont, f.SetTextColor, f.SetText = nix, nix, nix
+    f.SetFont = function(self, pfad, groesse, umriss)
+        self.schrift = { pfad = pfad, groesse = groesse, umriss = umriss }
+    end
+    f.SetTextColor = function(self, r, g, b) self.farbe = { r = r, g = g, b = b } end
+    f.SetText = function(self, t) self.inhalt = t end
     f.SetAllPoints, f.SetTexCoord, f.SetTexture = nix, nix, nix
     f.SetReverse, f.SetDrawEdge, f.SetCooldown, f.Clear = nix, nix, nix, nix
     f.SetMovable, f.SetClampedToScreen, f.RegisterForDrag = nix, nix, nix
@@ -70,6 +76,16 @@ local function neuerRahmen()
     f.skripte = {}
     f.SetScript = function(self, name, fn) self.skripte[name] = fn end
     f.GetScript = function(self, name) return self.skripte[name] end
+    -- Rueckfall NUR fuer Methodennamen: Set*/Register*/Enable*/Clear*/Show*/Hide*
+    -- sind bei WoW-Rahmen immer Funktionen. Datenfelder bleiben bewusst nil,
+    -- damit ein fehlendes Feld auffaellt statt still zu einer Funktion zu werden.
+    setmetatable(f, { __index = function(_, k)
+        if type(k) == "string" and k:match("^Set") or k:match("^Register")
+           or k:match("^Enable") or k:match("^Clear") or k:match("^Unregister") then
+            return nix
+        end
+        return nil
+    end })
     f.sichtbar = false
     f.Show = function(self) self.sichtbar = true end
     f.Hide = function(self) self.sichtbar = false end
@@ -78,12 +94,58 @@ local function neuerRahmen()
     return f
 end
 local rahmen = {}
-CreateFrame = function(_, name)
+local dropdowns, knoepfe = {}, {}
+CreateFrame = function(art, name)
     local f = neuerRahmen()
+    f.art = art
+    if art == "CheckButton" then
+        f.text = neuerRahmen()
+        f.SetChecked = function(self, v) self.gesetzt = v and true or false end
+        f.GetChecked = function(self) return self.gesetzt end
+    elseif art == "Slider" then
+        f.SetMinMaxValues, f.SetValueStep, f.SetObeyStepOnDrag = nix, nix, nix
+        f.SetWidth = nix
+        f.GetName = function() return name end
+        f.SetValue = function(self, v)
+            self.wert = v
+            local fn = self.skripte and self.skripte.OnValueChanged
+            if fn then fn(self, v) end
+        end
+        -- OptionsSliderTemplate erzeugt $parentLow/High/Text als Globale
+        if name then
+            for _, teil in ipairs({ "Low", "High", "Text" }) do
+                _G[name .. teil] = neuerRahmen()
+            end
+        end
+    elseif art == "DropdownButton" then
+        f.SetWidth = nix
+        f.SetupMenu = function(self, gen) self.generator = gen end
+        f.GenerateMenu = nix
+        f.SetDefaultText = function(self, t) self.beschriftung = t end
+        dropdowns[#dropdowns + 1] = f
+    elseif art == "Button" then
+        f.SetWidth = nix
+        knoepfe[#knoepfe + 1] = f
+    end
     if name then rahmen[name] = f end
     return f
 end
+_G = _G or {}
+ColorPickerFrame = { GetColorRGB = function() return 1, 1, 1 end }
+Settings = nil            -- kein Optionssystem: der Rueckfall muss tragen
+InterfaceOptions_AddCategory = function() end
 SLASH_CCALARM1, SlashCmdList = nil, {}
+
+-- kleine Nachstellung von rootDescription: sammelt die Auswahlpunkte ein
+local function menueAuslesen(dropdown)
+    local eintraege = {}
+    dropdown.generator(dropdown, {
+        CreateRadio = function(_, text, istGewaehlt, setzen)
+            eintraege[#eintraege + 1] = { text = text, gewaehlt = istGewaehlt, setzen = setzen }
+        end,
+    })
+    return eintraege
+end
 
 -------------------------------------------------------------------------------
 -- Addon laden
@@ -92,25 +154,18 @@ local pfad = (arg and arg[0] or ""):match("^(.*)tests/") or "./"
 local ns = {}
 local ladeLocales = assert(loadfile(pfad .. "Locales.lua"))
 local lade = assert(loadfile(pfad .. "CCAlarm.lua"))
+local ladeConfig = assert(loadfile(pfad .. "Config.lua"))
 ladeLocales("CCAlarm", ns)
 lade("CCAlarm", ns)
+ladeConfig("CCAlarm", ns)
 local addon = rahmen["CCAlarmFrame"]
 
--- SetScript war ein Platzhalter; den echten Handler abgreifen
-local handler
-do
-    local f = neuerRahmen()
-    f.SetScript = function(_, _, fn) handler = fn end
-    -- neu laden, diesmal mit greifendem SetScript
-    for k in pairs(rahmen) do rahmen[k] = nil end
-    CreateFrame = function(_, name)
-        local r = (name == "CCAlarmFrame") and f or neuerRahmen()
-        if name then rahmen[name] = r end
-        return r
-    end
-    lade("CCAlarm", ns)
-    addon = rahmen["CCAlarmFrame"]
-end
+-- Der Ereignishandler wird ueber GetScript abgegriffen; dafuer schreibt die
+-- Rahmen-Nachstellung jedes SetScript mit. Frueher wurde das Addon dafuer ein
+-- zweites Mal geladen -- mit einer zweiten CreateFrame-Fassung, die spaeter
+-- ergaenzte Rahmenarten nicht kannte und den Aufbau des Optionsfensters
+-- scheitern liess.
+local handler = addon:GetScript("OnEvent")
 assert(handler, "Ereignishandler nicht gefunden")
 
 CCAlarmDB = nil
@@ -315,6 +370,88 @@ Toene = 0
 ns.PlayAlarm()
 pruefe("unbekannter Ton faellt auf SOUNDKIT zurueck", Toene == 1)
 LibStub = function() return nil end
+
+echtesPrint("\n=== 10. Kommt die Einstellung an der Anzeige an? ===\n")
+-- Bis hierher war nur geprueft, dass die Schrift richtig AUFGELOEST wird.
+-- Eine Einstellung, die nichts bewirkt, ist gefaehrlicher als eine falsche --
+-- also wird jetzt bis zum FontString durchverfolgt.
+ruecksetzen()
+local textFeld = rahmen["CCAlarmDisplay"].text
+CCAlarmDB.fontName = "Morpheus"
+CCAlarmDB.textSize = 44
+CCAlarmDB.fontOutline = "THICKOUTLINE"
+CCAlarmDB.fontColor = { r = 0.2, g = 0.4, b = 0.6 }
+ns.ApplyDisplay()
+pruefe("Schriftart erreicht die Anzeige", textFeld.schrift.pfad == "Fonts\\MORPHEUS.TTF")
+pruefe("Schriftgroesse erreicht die Anzeige", textFeld.schrift.groesse == 44)
+pruefe("Umriss erreicht die Anzeige", textFeld.schrift.umriss == "THICKOUTLINE")
+pruefe("Farbe erreicht die Anzeige",
+       textFeld.farbe.r == 0.2 and textFeld.farbe.g == 0.4 and textFeld.farbe.b == 0.6)
+
+CCAlarmDB.fontOutline = "NONE"
+ns.ApplyDisplay()
+pruefe("Umriss 'kein' wird zu nil, nicht zur Zeichenkette 'NONE'",
+       textFeld.schrift.umriss == nil)
+
+CCAlarmDB.iconSize = 72
+ns.ApplyDisplay()
+pruefe("Symbolgroesse erreicht die Symbole",
+       rahmen["CCAlarmDisplay"].icons[1].breite == 72)
+
+-- Gegenprobe: schlaegt die Pruefung an, wenn die Einstellung NICHT ankaeme?
+local vorher = textFeld.schrift.pfad
+CCAlarmDB.fontName = "Skurri"
+pruefe("ohne ApplyDisplay bleibt die Anzeige unveraendert (Pruefung ist wach)",
+       textFeld.schrift.pfad == vorher)
+ns.ApplyDisplay()
+pruefe("nach ApplyDisplay ist sie geaendert",
+       textFeld.schrift.pfad == "Fonts\\skurri.ttf")
+CCAlarmDB.fontName = "Friz Quadrata TT"
+CCAlarmDB.fontOutline = "OUTLINE"
+CCAlarmDB.textSize = 32
+CCAlarmDB.iconSize = 50
+
+echtesPrint("\n=== 11. Optionsfenster: kommt der Klick bei der Einstellung an? ===\n")
+ruecksetzen()
+pruefe("Optionsfenster wurde angelegt", rahmen["CCAlarmOptionsPanel"] ~= nil)
+local fenster = rahmen["CCAlarmOptionsPanel"]
+fenster:GetScript("OnShow")()          -- baut das Fenster auf
+pruefe("Bedienelemente wurden erzeugt", #dropdowns >= 3 and #knoepfe >= 4)
+
+-- Das erste Auswahlfeld ist die Schriftart.
+local schriftMenue = dropdowns[1]
+local eintraege = menueAuslesen(schriftMenue)
+pruefe("Schriftmenue bietet Eintraege an", #eintraege >= 4)
+
+local morpheus
+for _, e in ipairs(eintraege) do if e.text == "Morpheus" then morpheus = e end end
+pruefe("Morpheus steht zur Wahl", morpheus ~= nil)
+
+if morpheus then
+    local textFeld = rahmen["CCAlarmDisplay"].text
+    pruefe("Morpheus ist vorher NICHT gewaehlt", morpheus.gewaehlt() == false)
+    morpheus.setzen()
+    pruefe("Klick setzt die Einstellung", CCAlarmDB.fontName == "Morpheus")
+    pruefe("Klick wirkt bis zur Anzeige durch",
+           textFeld.schrift.pfad == "Fonts\\MORPHEUS.TTF")
+    pruefe("danach ist Morpheus gewaehlt", morpheus.gewaehlt() == true)
+end
+
+-- Der Umriss ist ein eigenes Auswahlfeld mit uebersetzten Beschriftungen.
+local umrissMenue = dropdowns[2]
+local umrisse = menueAuslesen(umrissMenue)
+local dick
+for _, e in ipairs(umrisse) do if e.text == ns.L["OPT_OUTLINE_THICK"] then dick = e end end
+pruefe("Umriss 'dick' steht zur Wahl", dick ~= nil)
+if dick then
+    dick.setzen()
+    pruefe("uebersetzte Beschriftung wird auf den Schluessel zurueckgebildet",
+           CCAlarmDB.fontOutline == "THICKOUTLINE")
+end
+
+CCAlarmDB.fontName = "Friz Quadrata TT"
+CCAlarmDB.fontOutline = "OUTLINE"
+ns.ApplyDisplay()
 
 echtesPrint(("\n%d bestanden, %d gescheitert\n\n"):format(bestanden, gescheitert))
 os.exit(gescheitert == 0 and 0 or 1)

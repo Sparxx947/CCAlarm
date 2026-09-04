@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.1.1 — 2026-09-04
+
+Die Schriftwahl war schon da — jetzt ist auch belegt, dass sie ankommt.
+
+- **Behoben:** `SetDefaultText` wurde ungesichert aufgerufen. Es gibt die
+  Methode nicht auf jedem Client; dort wäre der Aufbau des Optionsfensters
+  daran zerbrochen. Jetzt abgesichert, wie es andere Addons auch tun.
+- Der Prüfstand verfolgte bisher nur, ob die Schrift richtig **aufgelöst** wird
+  — nicht, ob sie an der Anzeige **ankommt**. Eine Einstellung, die nichts
+  bewirkt, wäre schlimmer als eine falsche. Jetzt wird bis zum FontString
+  durchgeprüft: Schriftart, Größe, Umriss, Farbe, Symbolgröße — samt Gegenprobe,
+  dass die Prüfung eine ausbleibende Wirkung auch bemerkt.
+- Neu geprüft ist auch das **Optionsfenster selbst**: Es wird aufgebaut, das
+  Schriftmenü ausgelesen, ein Eintrag angeklickt, und nachgewiesen, dass der
+  Klick bis zur Anzeige durchschlägt.
+- Der Prüfstand lud das Addon zweimal, mit zwei verschiedenen Rahmen-Nachbauten
+  — der zweite kannte neue Rahmenarten nicht. Entfernt.
+- **39 → 57 Prüfungen.**
+
 ## 1.1.0 — 2026-09-04
 
 Einstellungen im Spiel, und das Addon steht jetzt vollständig für sich.

@@ -155,7 +155,9 @@ local ns = {}
 local ladeLocales = assert(loadfile(pfad .. "Locales.lua"))
 local lade = assert(loadfile(pfad .. "CCAlarm.lua"))
 local ladeConfig = assert(loadfile(pfad .. "Config.lua"))
+local ladeSeed = assert(loadfile(pfad .. "Data/CCSpells.lua"))
 ladeLocales("CCAlarm", ns)
+ladeSeed("CCAlarm", ns)
 lade("CCAlarm", ns)
 ladeConfig("CCAlarm", ns)
 local addon = rahmen["CCAlarmFrame"]
@@ -549,6 +551,45 @@ for _, k in ipairs(knoepfe) do
     if fn then local o = pcall(fn); getroffen = getroffen or o end
 end
 pruefe("kein Knopf im Optionsfenster wirft einen Fehler", getroffen)
+
+echtesPrint("\n=== 14. Mitgelieferte Saatliste ===\n")
+ruecksetzen()
+pruefe("Saatliste ist geladen und nicht leer",
+       ns.SEED_SPELLS ~= nil and next(ns.SEED_SPELLS) ~= nil)
+local saatId = next(ns.SEED_SPELLS)
+pruefe("ein Zauber aus der Saatliste gilt als bekannt", ns.IsKnown(saatId) ~= nil)
+pruefe("er steht NICHT in db.known (Saatliste wird nicht kopiert)",
+       CCAlarmDB.known[saatId] == nil)
+
+-- Er muss auch wirklich alarmieren
+Welt.auren.party1 = { { spellId = saatId, duration = 4, expirationTime = 1004,
+                        icon = 1, name = "Saat", auraInstanceID = 900 } }
+handler(addon, "UNIT_AURA", "party1")
+pruefe("CC aus der Saatliste loest Alarm aus", anzeigeSichtbar())
+
+-- Und er darf nicht als Kandidat auftauchen
+pruefe("bekannter Saatzauber wird kein Kandidat", CCAlarmDB.candidates[saatId] == nil)
+
+-- Entfernen muss dauerhaft sein
+SlashCmdList.CCALARM("remove " .. saatId)
+pruefe("entfernter Saatzauber gilt nicht mehr als bekannt", ns.IsKnown(saatId) == nil)
+pruefe("das Entfernen ist vermerkt (ueberlebt einen Neustart)",
+       CCAlarmDB.rejected[saatId] == true)
+-- Abschnitt 11 klickt jeden Knopf, auch "Loesen" -- der Rahmen bleibt dann
+-- sichtbar. Fuer diese Pruefung wieder festsetzen, sonst misst sie den
+-- Nachlass des vorherigen Abschnitts statt das Verhalten hier.
+ns.SetUnlocked(false)
+ruecksetzen()
+Welt.auren.party1 = { { spellId = saatId, duration = 4, expirationTime = 1004,
+                        icon = 1, name = "Saat", auraInstanceID = 901 } }
+handler(addon, "UNIT_AURA", "party1")
+pruefe("entfernter Saatzauber loest KEINEN Alarm mehr aus", not anzeigeSichtbar())
+
+-- Wieder aufnehmen hebt das auf
+SlashCmdList.CCALARM("add " .. saatId)
+pruefe("Wiederaufnehmen hebt das Entfernen auf", ns.IsKnown(saatId) ~= nil)
+CCAlarmDB.rejected = {}
+CCAlarmDB.known[saatId] = nil
 
 echtesPrint(("\n%d bestanden, %d gescheitert\n\n"):format(bestanden, gescheitert))
 os.exit(gescheitert == 0 and 0 or 1)

@@ -428,6 +428,19 @@ local function lossOfControlCount()
     return 0
 end
 
+-- Ist dieser Zauber als Kontrollverlust bekannt?
+--
+-- Die Saatliste (Data/CCSpells.lua) wird NICHT in db.known kopiert, sondern
+-- hier nachgeschlagen. Zwei Gruende: Eine neue Saatliste wirkt sofort, ohne
+-- dass alte Eintraege in der Datenbank haengen bleiben -- und ein vom Spieler
+-- entfernter Zauber (db.rejected) bliebe beim Kopieren nicht entfernt, sondern
+-- kaeme beim naechsten Login zurueck.
+function ns.IsKnown(id)
+    if not id then return nil end
+    if db.rejected and db.rejected[id] then return nil end
+    return db.known[id] or (ns.SEED_SPELLS and ns.SEED_SPELLS[id])
+end
+
 local function spellName(id)
     if C_Spell and C_Spell.GetSpellName then
         return C_Spell.GetSpellName(id) or ("spell " .. id)
@@ -441,7 +454,8 @@ local function learn()
         local data = lossOfControlData(i)
         local id   = data and (data.spellID or data.spellId)
         local kind = data and data.locType
-        if id and kind and RELEVANT_TYPES[kind] and not db.known[id] then
+        if id and kind and RELEVANT_TYPES[kind] and not db.known[id]
+           and not (ns.SEED_SPELLS and ns.SEED_SPELLS[id]) then
             db.known[id] = kind
             db.candidates[id] = nil
             say(L["MSG_LEARNED"], spellName(id), id, kind)
@@ -468,7 +482,7 @@ local function scan()
                 local aura = C_UnitAuras.GetAuraDataByIndex(unit, i, "HARMFUL")
                 if not aura then break end
                 local id = aura.spellId
-                if id and db.known[id] then
+                if id and ns.IsKnown(id) then
                     local duration = aura.duration or 0
                     if duration == 0 or duration >= db.minDuration then
                         hits[#hits + 1] = {
@@ -485,7 +499,8 @@ local function scan()
                             if db.sound then ns.PlayAlarm(role) end
                         end
                     end
-                elseif id and db.collect and not db.candidates[id] then
+                elseif id and db.collect and not db.candidates[id]
+                       and not (ns.SEED_SPELLS and ns.SEED_SPELLS[id]) then
                     local duration = aura.duration or 0
                     if duration >= db.minDuration then
                         db.candidates[id] = aura.name or ("spell " .. id)
@@ -522,7 +537,14 @@ local function command(input)
         if not db.enabled and display then display:Hide() end
     elseif word == "status" then
         local known, candidates = 0, 0
-        for _ in pairs(db.known) do known = known + 1 end
+        local gezaehlt = {}
+        for id in pairs(db.known) do
+            if ns.IsKnown(id) then gezaehlt[id] = true end
+        end
+        for id in pairs(ns.SEED_SPELLS or {}) do
+            if ns.IsKnown(id) then gezaehlt[id] = true end
+        end
+        for _ in pairs(gezaehlt) do known = known + 1 end
         for _ in pairs(db.candidates) do candidates = candidates + 1 end
         say(L["MSG_STATUS"],
             db.enabled and L["MSG_ON"] or L["MSG_OFF"],
@@ -543,10 +565,19 @@ local function command(input)
         ns.ResetPosition()
         say(L["MSG_POS_RESET"])
     elseif word == "list" then
-        local count = 0
+        local count, gesehen = 0, {}
         for id, kind in pairs(db.known) do
-            say("  %d  %s  (%s)", id, spellName(id), kind)
-            count = count + 1
+            if ns.IsKnown(id) then
+                gesehen[id] = true
+                say("  %d  %s  (%s)", id, spellName(id), kind)
+                count = count + 1
+            end
+        end
+        for id, kind in pairs(ns.SEED_SPELLS or {}) do
+            if not gesehen[id] and ns.IsKnown(id) then
+                say("  %d  %s  (%s, %s)", id, spellName(id), kind, L["MSG_SEEDED"])
+                count = count + 1
+            end
         end
         if count == 0 then say(L["MSG_NOTHING_LEARNED"]) end
     elseif word == "candidates" then
@@ -562,9 +593,14 @@ local function command(input)
         if word == "add" then
             db.known[id] = "MANUAL"
             db.candidates[id] = nil
+            if db.rejected then db.rejected[id] = nil end
             say(L["MSG_ADDED"], id)
         else
             db.known[id] = nil
+            -- Merken, dass der Spieler ihn nicht will: sonst greift beim
+            -- naechsten Start wieder die Saatliste.
+            db.rejected = db.rejected or {}
+            db.rejected[id] = true
             say(L["MSG_REMOVED"], id)
         end
     elseif word == "clear" then
@@ -588,6 +624,7 @@ CCAlarm:SetScript("OnEvent", function(self, event, arg1)
         fillMissing(db, DEFAULTS)
         db.known = db.known or {}
         db.candidates = db.candidates or {}
+        db.rejected = db.rejected or {}
 
         self:UnregisterEvent("ADDON_LOADED")
         self:RegisterEvent("UNIT_AURA")

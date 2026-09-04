@@ -35,7 +35,11 @@ IsInInstance = function() return Welt.instanz ~= nil, Welt.instanz end
 IsInRaid = function() return Welt.instanz == "raid" end
 GetNumGroupMembers = function() local n=0 for _ in pairs(Welt.rollen) do n=n+1 end return n end
 PlaySound = function() Toene = Toene + 1 end
-SOUNDKIT = { RAID_WARNING = 1 }
+PlaySoundFile = function() Toene = Toene + 1 end
+UIParent = { GetName = function() return "UIParent" end }
+LibStub = function() return nil end   -- LibSharedMedia bewusst nicht vorhanden
+SOUNDKIT = { RAID_WARNING = 1, READY_CHECK = 2, UI_RAID_BOSS_WHISPER_WARNING = 3,
+             UI_MAP_WAYPOINT_CHAT_SHARE = 4 }
 C_Timer = { After = function() end }
 C_Spell = { GetSpellName = function(id) return "Zauber" .. id end }
 C_UnitAuras = {
@@ -49,11 +53,23 @@ C_LossOfControl = {
 local function neuerRahmen()
     local f = {}
     local function nix() end
-    f.SetSize, f.SetPoint, f.ClearAllPoints, f.SetFrameStrata = nix, nix, nix, nix
-    f.SetScript, f.RegisterEvent, f.UnregisterEvent = nix, nix, nix
+    f.SetSize, f.ClearAllPoints, f.SetFrameStrata = nix, nix, nix
+    f.RegisterEvent, f.UnregisterEvent = nix, nix
     f.SetFont, f.SetTextColor, f.SetText = nix, nix, nix
     f.SetAllPoints, f.SetTexCoord, f.SetTexture = nix, nix, nix
     f.SetReverse, f.SetDrawEdge, f.SetCooldown, f.Clear = nix, nix, nix, nix
+    f.SetMovable, f.SetClampedToScreen, f.RegisterForDrag = nix, nix, nix
+    f.StartMoving, f.StopMovingOrSizing, f.EnableMouse = nix, nix, nix
+    f.SetColorTexture = nix
+    f.SetPoint = function(self, punkt, _, relativ, x, y)
+        self.punkt, self.relativ, self.x, self.y = punkt, relativ, x, y
+    end
+    f.GetPoint = function(self)
+        return self.punkt or "CENTER", UIParent, self.relativ or "TOP", self.x or 0, self.y or 0
+    end
+    f.skripte = {}
+    f.SetScript = function(self, name, fn) self.skripte[name] = fn end
+    f.GetScript = function(self, name) return self.skripte[name] end
     f.sichtbar = false
     f.Show = function(self) self.sichtbar = true end
     f.Hide = function(self) self.sichtbar = false end
@@ -202,6 +218,103 @@ SlashCmdList.CCALARM("remove 557")
 pruefe("uebersetzter Text vorhanden", ns.L["MSG_ADDED"] ~= "MSG_ADDED")
 pruefe("fehlender Schluessel faellt auf sich selbst zurueck",
        ns.L["GIBT_ES_NICHT"] == "GIBT_ES_NICHT")
+
+echtesPrint("\n=== 8. Schrift, Farbe, Position, Ton ===\n")
+ruecksetzen()
+pruefe("Schriftpfad faellt ohne LibSharedMedia auf die eingebaute zurueck",
+       ns.FontPath() == "Fonts\\FRIZQT__.TTF")
+CCAlarmDB.fontName = "Morpheus"
+pruefe("bekannte eingebaute Schrift wird aufgeloest",
+       ns.FontPath() == "Fonts\\MORPHEUS.TTF")
+CCAlarmDB.fontName = "Gibt Es Nicht"
+pruefe("unbekannte Schrift faellt zurueck statt nil zu liefern",
+       ns.FontPath() == CCAlarmDB.fontPath)
+CCAlarmDB.fontName = "Friz Quadrata TT"
+
+local schriften = ns.FontList()
+pruefe("Schriftliste ist nicht leer", #schriften >= 4)
+local toene = ns.SoundList()
+pruefe("Tonliste ist nicht leer", #toene >= 4)
+
+Toene = 0
+ns.PlayAlarm()
+pruefe("PlayAlarm spielt etwas", Toene == 1)
+CCAlarmDB.soundKit = "GIBT_ES_NICHT"
+Toene = 0
+ns.PlayAlarm()
+pruefe("unbekannter Ton faellt auf RAID_WARNING zurueck", Toene == 1)
+CCAlarmDB.soundKit = "RAID_WARNING"
+
+-- Position: verschieben und zuruecksetzen
+local anzeige = rahmen["CCAlarmDisplay"]
+CCAlarmDB.point, CCAlarmDB.relativePoint = "TOPLEFT", "TOPLEFT"
+CCAlarmDB.offsetX, CCAlarmDB.offsetY = 111, -222
+ns.ApplyDisplay()
+pruefe("Position wird angewendet", anzeige.punkt == "TOPLEFT" and anzeige.y == -222)
+ns.ResetPosition()
+pruefe("Zuruecksetzen stellt die Voreinstellung her",
+       CCAlarmDB.point == "CENTER" and CCAlarmDB.offsetY == -220)
+
+-- Ziehen speichert die neue Verankerung
+CCAlarmDB.locked = false
+anzeige.punkt, anzeige.relativ, anzeige.x, anzeige.y = "BOTTOM", "BOTTOM", 7, 9
+anzeige:GetScript("OnDragStop")(anzeige)
+pruefe("Ziehen speichert die Verankerung",
+       CCAlarmDB.point == "BOTTOM" and CCAlarmDB.offsetX == 7 and CCAlarmDB.offsetY == 9)
+ns.ResetPosition()
+CCAlarmDB.locked = true
+
+-- Loesen zeigt den Rahmen, Festsetzen versteckt ihn wieder
+ns.SetUnlocked(true)
+pruefe("geloest: Rahmen sichtbar", anzeigeSichtbar())
+pruefe("geloest: nicht mehr gesperrt", CCAlarmDB.locked == false)
+ns.SetUnlocked(false)
+pruefe("festgesetzt: Rahmen wieder versteckt", not anzeigeSichtbar())
+
+-- Ein laufender Alarm darf durch Festsetzen nicht verschwinden
+ruecksetzen()
+Welt.auren.party1 = { { spellId = 4321, duration = 4, expirationTime = 1004, icon = 1, name = "B" } }
+handler(addon, "UNIT_AURA", "party1")
+ns.SetUnlocked(false)
+pruefe("laufender Alarm ueberlebt das Festsetzen", anzeigeSichtbar())
+
+echtesPrint("\n=== 9. Mit vorhandener LibSharedMedia ===\n")
+-- Die Bibliothek ist eingebettet, im Spiel also immer da. Hier wird sie
+-- nachgestellt, damit auch dieser Weg geprueft ist und nicht nur der Rueckfall.
+local LSM = {
+    schriften = { ["Meine Schrift"] = "Interface\\Meine.ttf" },
+    toene     = { ["Mein Ton"] = "Interface\\Mein.ogg" },
+}
+function LSM:List(art)
+    local aus = {}
+    for name in pairs(art == "font" and self.schriften or self.toene) do aus[#aus+1] = name end
+    table.sort(aus)
+    return aus
+end
+function LSM:Fetch(art, name)
+    return (art == "font" and self.schriften or self.toene)[name]
+end
+LibStub = function(name) return name == "LibSharedMedia-3.0" and LSM or nil end
+
+pruefe("Schriftliste kommt aus der Bibliothek",
+       ns.FontList()[1] == "Meine Schrift")
+CCAlarmDB.fontName = "Meine Schrift"
+pruefe("Schrift der Bibliothek wird aufgeloest",
+       ns.FontPath() == "Interface\\Meine.ttf")
+CCAlarmDB.fontName = "Gibt Es Nicht"
+pruefe("unbekannte Schrift faellt trotz Bibliothek zurueck",
+       ns.FontPath() == CCAlarmDB.fontPath)
+CCAlarmDB.fontName = "Friz Quadrata TT"
+
+CCAlarmDB.soundName = "Mein Ton"
+Toene = 0
+ns.PlayAlarm()
+pruefe("Ton der Bibliothek wird abgespielt", Toene == 1)
+CCAlarmDB.soundName = "Gibt Es Nicht"
+Toene = 0
+ns.PlayAlarm()
+pruefe("unbekannter Ton faellt auf SOUNDKIT zurueck", Toene == 1)
+LibStub = function() return nil end
 
 echtesPrint(("\n%d bestanden, %d gescheitert\n\n"):format(bestanden, gescheitert))
 os.exit(gescheitert == 0 and 0 or 1)

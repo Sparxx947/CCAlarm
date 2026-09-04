@@ -13,7 +13,10 @@ import re
 import sys
 
 WURZEL = pathlib.Path(__file__).resolve().parent.parent
-UEBERSPRINGEN = {".git", "dist", "__pycache__"}
+# Libs/ enthaelt unveraenderten Fremdcode; die Adressen darin sind
+# Urheberangaben der Autoren, nicht Spuren aus diesem Rechner. Sie werden
+# ausgelassen, aber im Bericht genannt, damit die Ausnahme sichtbar bleibt.
+UEBERSPRINGEN = {".git", "dist", "__pycache__", "Libs"}
 # Diese Datei enthaelt die Suchmuster selbst -- wuerde sie sich mitpruefen,
 # meldete sie bei jedem Lauf ihre eigenen Realmnamen und waere wertlos.
 NICHT_PRUEFEN = {"tools/check_privacy.py"}
@@ -69,7 +72,10 @@ def main() -> int:
         print(f"\n{funde} Fund(e) -- vor einer Veroeffentlichung bereinigen.",
               file=sys.stderr)
         return 1
-    print("keine personenbezogenen Spuren gefunden")
+    libs = WURZEL / "Libs"
+    anzahl = len([p for p in libs.rglob("*") if p.is_file()]) if libs.is_dir() else 0
+    print("keine personenbezogenen Spuren gefunden"
+          + (f" (Libs/ mit {anzahl} Fremddatei(en) ausgelassen)" if anzahl else ""))
     return 0
 
 

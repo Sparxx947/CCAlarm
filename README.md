@@ -63,6 +63,21 @@ candidates, listed by `/ccalarm candidates` for promotion.
 `SCHOOL_INTERRUPT` and `DISARM` are never learned: neither stops anyone from
 moving or healing.*
 
+## Abhängigkeiten: keine
+
+Das Addon bringt alles mit, was es braucht. `LibSharedMedia-3.0`,
+`CallbackHandler-1.0` und `LibStub` liegen unter [`Libs/`](Libs/) bei — es setzt
+**kein** anderes Addon voraus. Weil LibStub Bibliotheken teilt, gewinnt eine
+neuere Fassung aus einem anderen Addon automatisch, und Schriften oder Töne, die
+andere Addons anmelden, erscheinen zusätzlich in der Auswahl. Ein Gewinn, keine
+Bedingung. `tools/check_selfcontained.py` hält das dauerhaft nach.
+
+*No dependencies: the addon ships everything it needs. LibSharedMedia-3.0,
+CallbackHandler-1.0 and LibStub are embedded under `Libs/`, so no other addon is
+required. Since LibStub shares libraries, a newer copy from another addon wins
+automatically, and fonts or sounds other addons register simply appear in the
+lists as a bonus. `tools/check_selfcontained.py` enforces this.*
+
 ## Grenzen
 
 Ehrlich benannt, damit niemand sich auf etwas verlässt, was das Addon nicht kann:
@@ -83,13 +98,43 @@ watched, since WoW draws its own loss-of-control display for yourself; and roles
 come from the group role assignment, so a member without an assigned role is not
 watched.*
 
+## Einstellen
+
+Alles lässt sich im Spiel ändern — **Optionen → AddOns → CCAlarm**, oder direkt
+mit `/ccalarm config`:
+
+| Bereich | Einstellbar |
+|---|---|
+| Warntext | Schriftart, Größe (10–72), Farbe, Umriss (kein / dünn / dick) |
+| Symbole | anzeigen, Größe (16–96), Höchstzahl (1–10) |
+| Ton | an/aus, Auswahl aus allen bekannten Tönen, Knopf zum Anhören |
+| Rollen | Heiler, Tank — einzeln |
+| Zonen | Dungeon, Arena, offene Welt, Schlachtzug, Schlachtfeld |
+| Position | **Lösen und ziehen**, festsetzen, zurücksetzen |
+
+Beim Lösen wird der Rahmen sichtbar hinterlegt, damit man ihn auch ohne
+laufenden Alarm greifen kann. Gespeichert wird die vollständige Verankerung —
+die Anzeige sitzt also auch nach einem Wechsel von Auflösung oder UI-Skalierung
+wieder richtig.
+
+*Everything is configurable in game under Options → AddOns → CCAlarm, or with
+`/ccalarm config`: font face, size, colour and outline for the warning text;
+icon display, size and count; the alarm sound with a preview button; which roles
+to watch; which zones to be active in; and the position, which is unlocked by a
+button and dragged into place. While unlocked the frame is tinted so it can be
+grabbed even with no alarm running, and the complete anchor is saved so the
+display returns to the same spot after a resolution or UI scale change.*
+
 ## Befehle
 
 Englisch ist die Grundform, die deutschen Wörter funktionieren ebenso.
 
 | Befehl | Deutsch | Wirkung |
 |---|---|---|
+| `/ccalarm config` | `einstellungen` | Optionsfenster öffnen |
 | `/ccalarm test` | | Probealarm für 5 Sekunden |
+| `/ccalarm unlock` / `lock` | `loesen` / `festsetzen` | Rahmen verschiebbar machen |
+| `/ccalarm reset` | `zuruecksetzen` | Position zurücksetzen |
 | `/ccalarm status` | | an/aus, Rollen, Zahl der gelernten Zauber, gilt hier |
 | `/ccalarm list` | `liste` | alle gelernten Zauber mit Einstufung |
 | `/ccalarm candidates` | `kandidaten` | gesehene, noch unbekannte Auren |
@@ -118,6 +163,8 @@ world; silent in raids and battlegrounds. The values live in `CCAlarmDB`.*
 luac5.1 -p CCAlarm.lua Locales.lua tests/pruefstand.lua   # Syntax
 lua5.1 tests/pruefstand.lua                                # Verhalten
 python3 tools/check_toc.py                                 # .toc gegen den Dateibestand
+python3 tools/check_selfcontained.py                       # keine Fremdabhaengigkeit
+python3 tools/check_locales.py                             # Uebersetzungen gegen den Code
 tools/package.sh                                           # dist/CCAlarm-<version>.zip
 ```
 

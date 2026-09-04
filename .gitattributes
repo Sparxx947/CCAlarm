@@ -1,3 +1,8 @@
 * text=auto eol=lf
+
+# Fremdcode unveraendert lassen -- sonst weicht jede Zeile vom Original ab
+# und ein Abgleich mit der Quelle ist nicht mehr moeglich.
+Libs/** -text
+
 *.tga binary
 *.blp binary

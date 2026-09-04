@@ -37,6 +37,20 @@ local RELEVANT_TYPES = {
 local DEFAULTS = {
     enabled       = true,
     roles         = { HEALER = true, TANK = true },
+    -- Font: LibSharedMedia name when available, otherwise the path is used.
+    fontName      = "Friz Quadrata TT",
+    fontPath      = "Fonts\\FRIZQT__.TTF",
+    fontOutline   = "OUTLINE",
+    fontColor     = { r = 1, g = 0.1, b = 0.1 },
+    -- Position of the display. Saved as a full anchor so the frame lands in the
+    -- same spot on any resolution the player switches to.
+    point         = "CENTER",
+    relativePoint = "TOP",
+    offsetX       = 0,
+    locked        = true,
+    -- Sound: LibSharedMedia name when available, otherwise the SOUNDKIT entry.
+    soundName     = "Raid Warning",
+    soundKit      = "RAID_WARNING",
     inDungeon     = true,
     inArena       = true,
     inWorld       = true,
@@ -58,6 +72,81 @@ local DEFAULTS = {
 local db              -- CCAlarmDB, set on ADDON_LOADED
 local activeAlarms = {}   -- key -> true, keeps a held aura from retriggering
 local display             -- frame, built lazily
+
+-------------------------------------------------------------------------------
+-- Media
+--
+-- LibSharedMedia is embedded (see Libs/), so the addon carries its own font and
+-- sound registry and depends on no other addon. Because LibStub shares
+-- libraries, media registered by other addons appear in the lists as well --
+-- a bonus, never a requirement. The built-in table below is the last resort
+-- should the library fail to load at all.
+-------------------------------------------------------------------------------
+
+local BUILTIN_FONTS = {
+    ["Friz Quadrata TT"] = "Fonts\\FRIZQT__.TTF",
+    ["Arial Narrow"]     = "Fonts\\ARIALN.TTF",
+    ["Morpheus"]         = "Fonts\\MORPHEUS.TTF",
+    ["Skurri"]           = "Fonts\\skurri.ttf",
+}
+
+-- Sounds that ship with the client. The SOUNDKIT entries are all in active use
+-- by other addons, so they are known to exist rather than assumed.
+local BUILTIN_SOUNDS = {
+    ["Raid Warning"]  = "RAID_WARNING",
+    ["Ready Check"]   = "READY_CHECK",
+    ["Boss Whisper"]  = "UI_RAID_BOSS_WHISPER_WARNING",
+    ["Map Ping"]      = "UI_MAP_WAYPOINT_CHAT_SHARE",
+}
+
+local function lsm()
+    return LibStub and LibStub("LibSharedMedia-3.0", true) or nil
+end
+ns.LSM = lsm
+
+-- Sorted list of selectable font names, plus the resolved path for each.
+function ns.FontList()
+    local names, paths = {}, {}
+    local media = lsm()
+    if media then
+        for _, name in ipairs(media:List("font")) do
+            names[#names + 1] = name
+            paths[name] = media:Fetch("font", name)
+        end
+    else
+        for name, path in pairs(BUILTIN_FONTS) do
+            names[#names + 1] = name
+            paths[name] = path
+        end
+    end
+    table.sort(names)
+    return names, paths
+end
+
+function ns.SoundList()
+    local names = {}
+    local media = lsm()
+    if media then
+        for _, name in ipairs(media:List("sound")) do names[#names + 1] = name end
+    else
+        for name in pairs(BUILTIN_SOUNDS) do names[#names + 1] = name end
+    end
+    table.sort(names)
+    return names
+end
+
+-- Resolve the configured font to a usable path. Falls back step by step rather
+-- than returning nil, because SetFont with a nil path throws.
+local function fontPath()
+    local media = lsm()
+    if media and db.fontName then
+        local path = media:Fetch("font", db.fontName, true)
+        if path then return path end
+    end
+    if db.fontName and BUILTIN_FONTS[db.fontName] then return BUILTIN_FONTS[db.fontName] end
+    return db.fontPath or "Fonts\\FRIZQT__.TTF"
+end
+ns.FontPath = fontPath
 
 -------------------------------------------------------------------------------
 -- Helpers
@@ -112,14 +201,31 @@ local function buildDisplay()
 
     display = CreateFrame("Frame", "CCAlarmDisplay", UIParent)
     display:SetSize(400, 60)
-    display:SetPoint("CENTER", UIParent, "TOP", 0, db.offsetY)
     display:SetFrameStrata("HIGH")
+    display:SetMovable(true)
+    display:SetClampedToScreen(true)
+    display:RegisterForDrag("LeftButton")
+    display:SetScript("OnDragStart", function(self)
+        if not db.locked then self:StartMoving() end
+    end)
+    display:SetScript("OnDragStop", function(self)
+        self:StopMovingOrSizing()
+        -- Store the anchor the frame actually ended up with, so it returns to
+        -- the same place regardless of resolution or UI scale changes.
+        local point, _, relativePoint, x, y = self:GetPoint()
+        db.point, db.relativePoint, db.offsetX, db.offsetY = point, relativePoint, x, y
+    end)
     display:Hide()
 
+    -- Backdrop shown only while unlocked, so there is something to grab when
+    -- no alarm is on screen.
+    display.grip = display:CreateTexture(nil, "BACKGROUND")
+    display.grip:SetAllPoints()
+    display.grip:SetColorTexture(0, 0.6, 1, 0.25)
+    display.grip:Hide()
+
     display.text = display:CreateFontString(nil, "OVERLAY")
-    display.text:SetFont("Fonts\\FRIZQT__.TTF", db.textSize, "OUTLINE")
     display.text:SetPoint("BOTTOM", display, "TOP", 0, 4)
-    display.text:SetTextColor(1, 0.1, 0.1)
 
     display.icons = {}
     for i = 1, 10 do
@@ -135,7 +241,74 @@ local function buildDisplay()
         icon:Hide()
         display.icons[i] = icon
     end
+
+    ns.ApplyDisplay()
     return display
+end
+
+-- Push every visual setting onto the frame. Called after building it and again
+-- whenever the options panel changes something, so there is exactly one place
+-- that knows how a setting reaches the screen.
+function ns.ApplyDisplay()
+    if not display then return end
+    display:ClearAllPoints()
+    display:SetPoint(db.point or "CENTER", UIParent,
+                     db.relativePoint or "TOP", db.offsetX or 0, db.offsetY or -220)
+    display.text:SetFont(fontPath(), db.textSize, db.fontOutline ~= "NONE" and db.fontOutline or nil)
+    local c = db.fontColor or {}
+    display.text:SetTextColor(c.r or 1, c.g or 0.1, c.b or 0.1)
+    for _, icon in ipairs(display.icons) do
+        icon:SetSize(db.iconSize, db.iconSize)
+    end
+    display:EnableMouse(not db.locked)
+    if db.locked then display.grip:Hide() else display.grip:Show() end
+end
+
+-- Unlocking shows the frame with its grip so it can be dragged even when no
+-- alarm is active; locking hides it again unless an alarm is running.
+function ns.SetUnlocked(unlocked)
+    db.locked = not unlocked
+    local frame = buildDisplay()
+    ns.ApplyDisplay()
+    if unlocked then
+        frame.text:SetText(L["OPT_TITLE"])
+        frame.text:Show()
+        frame:Show()
+    elseif not frame.shownByAlarm then
+        frame:Hide()
+    end
+end
+
+function ns.ResetPosition()
+    db.point, db.relativePoint = DEFAULTS.point, DEFAULTS.relativePoint
+    db.offsetX, db.offsetY = DEFAULTS.offsetX, DEFAULTS.offsetY
+    ns.ApplyDisplay()
+end
+
+function ns.GetDB() return db end
+
+-- Shown by the test button and by /ccalarm test. One implementation, so the
+-- panel cannot drift from the command.
+function ns.Test()
+    local aura = { icon = 136071, duration = 5, expirationTime = GetTime() + 5 }
+    show({ { name = UnitName("player") or "Test", role = "HEALER", aura = aura } })
+    if db.sound then ns.PlayAlarm() end
+    C_Timer.After(5, function()
+        if display then
+            display.shownByAlarm = false
+            if db.locked then display:Hide() end
+        end
+    end)
+end
+
+-- One place that decides what an alarm sounds like.
+function ns.PlayAlarm()
+    local media = lsm()
+    if media and db.soundName then
+        local file = media:Fetch("sound", db.soundName, true)
+        if file then PlaySoundFile(file, "Master"); return end
+    end
+    PlaySound(SOUNDKIT[db.soundKit or "RAID_WARNING"] or SOUNDKIT.RAID_WARNING, "Master")
 end
 
 local function layoutIcons(count)
@@ -152,7 +325,11 @@ end
 -- hits: list of { name, role, aura }
 local function show(hits)
     local frame = buildDisplay()
-    if #hits == 0 then frame:Hide(); return end
+    if #hits == 0 then
+        frame.shownByAlarm = false
+        if db.locked then frame:Hide() end
+        return
+    end
 
     if db.warningText then
         local first = hits[1]
@@ -181,6 +358,7 @@ local function show(hits)
         end
     end
     for i = shown + 1, #frame.icons do frame.icons[i]:Hide() end
+    frame.shownByAlarm = true
     frame:Show()
 end
 
@@ -266,7 +444,7 @@ local function scan()
                         local key = aura.auraInstanceID or (unit .. ":" .. id)
                         if not activeAlarms[key] then
                             activeAlarms[key] = true
-                            if db.sound then PlaySound(SOUNDKIT.RAID_WARNING, "Master") end
+                            if db.sound then ns.PlayAlarm() end
                         end
                     end
                 elseif id and db.collect and not db.candidates[id] then
@@ -290,6 +468,8 @@ end
 local ALIASES = {
     hilfe = "help", an = "on", aus = "off", liste = "list",
     kandidaten = "candidates", dazu = "add", weg = "remove", leeren = "clear",
+    einstellungen = "config", optionen = "config", loesen = "unlock",
+    festsetzen = "lock", zuruecksetzen = "reset",
 }
 
 local function command(input)
@@ -314,11 +494,16 @@ local function command(input)
             zoneAllowed() and L["MSG_YES"] or L["MSG_NO"])
     elseif word == "test" then
         -- Prove the alarm path without waiting for real crowd control.
-        local aura = { icon = 136071, duration = 5, expirationTime = GetTime() + 5 }
-        show({ { name = UnitName("player") or "Test", role = "HEALER", aura = aura } })
-        if db.sound then PlaySound(SOUNDKIT.RAID_WARNING, "Master") end
-        C_Timer.After(5, function() if display then display:Hide() end end)
+        ns.Test()
         say(L["MSG_TEST"])
+    elseif word == "config" or word == "options" then
+        ns.OpenOptions()
+    elseif word == "unlock" or word == "lock" then
+        ns.SetUnlocked(word == "unlock")
+        say(word == "unlock" and L["MSG_UNLOCKED"] or L["MSG_LOCKED"])
+    elseif word == "reset" then
+        ns.ResetPosition()
+        say(L["MSG_POS_RESET"])
     elseif word == "list" then
         local count = 0
         for id, kind in pairs(db.known) do
@@ -375,6 +560,7 @@ CCAlarm:SetScript("OnEvent", function(self, event, arg1)
 
         SLASH_CCALARM1 = "/ccalarm"
         SlashCmdList.CCALARM = command
+        if ns.RegisterOptions then ns.RegisterOptions() end
         return
     end
 

@@ -30,7 +30,9 @@ def main() -> int:
         print(f"Interface {versionen} enthaelt {ERWARTET} nicht", file=sys.stderr)
         return 1
 
-    gelistet = [z.strip() for z in text.splitlines()
+    # WoW schreibt Pfade in der .toc mit Backslash; auf Linux/CI muss daraus ein
+    # normaler Pfad werden, sonst meldet die Pruefung jede Bibliothek als fehlend.
+    gelistet = [z.strip().replace("\\", "/") for z in text.splitlines()
                 if z.strip() and not z.strip().startswith("#")]
     fehler = 0
     for datei in gelistet:
@@ -38,6 +40,8 @@ def main() -> int:
             print(f"in der .toc gelistet, fehlt aber: {datei}", file=sys.stderr)
             fehler += 1
 
+    # Nur die eigenen Dateien auf oberster Ebene; Bibliotheken bringen eigene
+    # Hilfsdateien mit, die bewusst nicht geladen werden.
     vorhanden = {p.name for p in WURZEL.glob("*.lua")}
     ungenutzt = vorhanden - set(gelistet)
     for datei in sorted(ungenutzt):

@@ -1,47 +1,5 @@
 # Changelog
 
-## 0.2.3 — 2026-09-04
-
-**In Mythic+ und PvP war CCAlarm blind — und hat davon nichts gesagt.** Der
-Fehlerspeicher zählte an einem einzigen Abend **14 004** Vorfälle:
-
-```
-GetAuraDataByIndex(): Auras cannot be accessed when secret while tainted by 'CCAlarm'
-```
-
-Seit Midnight hält Blizzard Auren in Mythic+ und PvP geheim, sobald ein Addon im
-Aufrufweg steht. `C_UnitAuras.GetAuraDataByIndex` gibt dann **nicht nil zurück,
-sondern wirft** — jeder Durchlauf brach ab, bevor er einen Alarm auslösen
-konnte. Ausgerechnet dort, wo das Addon gebraucht wird.
-
-Der Zugriff läuft jetzt über ein Tor aus Blizzards eigener Abfrage
-`C_Secrets.ShouldAurasBeSecret()` und einer `pcall`-Sonde als Rückfall für
-Fassungen ohne diese Schnittstelle; der Aufruf selbst ist zusätzlich abgesichert,
-weil die Sperre zwischen Tor und Zugriff greifen kann. Nur die Antwort
-„gesperrt" wird zwischengespeichert, und nur für den laufenden Frame: sie ist
-die teure, weil die Sonde dafür einen echten Lua-Fehler baut.
-
-★ **Blind sein ist hinnehmbar, stumm blind sein nicht.** Beides ließ sich nicht
-beheben — die Auren anderer Gruppenmitglieder sind für Addons schlicht nicht
-mehr lesbar. Deshalb sagt CCAlarm es jetzt: einmal je Instanz im Chat, und
-`/ccalarm status` nennt es ebenfalls, statt weiter „hier aktiv: ja" zu behaupten.
-
-Der Prüfstand deckt den Fall in beide Richtungen ab (14 neue Prüfungen, 104
-insgesamt): mit Sperre kein Fehler und kein Alarm, ohne Sperre unverändert
-Alarm. Nachgewiesen ist auch, dass er anschlägt — ohne das Tor scheitert er am
-echten Fehler.
-
-*In Mythic+ and PvP, CCAlarm was blind and said nothing about it — 14 004
-errors in one evening. Since Midnight, Blizzard keeps auras secret there once an
-addon is in the call path, and `GetAuraDataByIndex` throws rather than returning
-nil, aborting every scan. Reads now go through a gate built on
-`C_Secrets.ShouldAurasBeSecret()` with a `pcall` probe as fallback, plus a guard
-on the call itself; only the "restricted" answer is cached, and only for the
-current frame. Other players' auras genuinely cannot be read any more, so the
-addon now says so — once per instance, and in `/ccalarm status` — instead of
-falling silent. 14 new checks cover both directions, and the suite was shown to
-fail on the real error when the gate is removed.*
-
 ## 0.2.2 — 2026-09-04
 
 **Reparaturfassung: 0.2.1 kam nie auf CurseForge an.** Am Addon selbst ändert

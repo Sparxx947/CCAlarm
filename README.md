@@ -102,8 +102,20 @@ lists as a bonus. `tools/check_selfcontained.py` enforces this.*
 
 Ehrlich benannt, damit niemand sich auf etwas verlässt, was das Addon nicht kann:
 
+- **Die Zauberliste betrifft nur den Ton.** Anzeige und Warntext richten sich
+  nach Blizzards eigener CC-Einstufung und kennen daher auch Effekte, die in
+  keiner Liste stehen. Der Ton dagegen wird beim Spiel je Zauber-ID angemeldet:
+  Was die Liste nicht kennt, wird gezeigt, aber nicht gehört.
 - **Am Anfang ist die Liste leer.** Sie füllt sich, sobald einen selbst zum
   ersten Mal ein bestimmter Effekt trifft — oder man einen Kandidaten übernimmt.
+- **In Mythic+ und PvP lernt das Addon nichts dazu.** Dort hält Blizzard die
+  Auren geheim. Der Alarm läuft trotzdem, weil ihn das Spiel selbst zeichnet und
+  abspielt — nur neue Zauber kann CCAlarm dort drinnen nicht aufsammeln.
+- **Ton nur aus Dateien.** Die Spiel-Engine nimmt zum Abspielen einen Dateinamen
+  entgegen, keine SOUNDKIT-Nummer. Die mitgelieferten Töne und alles, was über
+  LibSharedMedia als Datei bereitsteht, funktionieren; die eingebauten
+  Oberflächenklänge nur im Probealarm. Ist ein solcher gewählt, spielt das
+  Addon ersatzweise den mitgelieferten Ton und sagt das in `/ccalarm status`.
 - **Private Auren und einige Encounter-Mechaniken sind für Addons unsichtbar.**
   Was Blizzard verbirgt, kann auch dieses Addon nicht sehen.
 - **Nur Gruppenmitglieder.** Für einen selbst zeigt WoW seine eigene
@@ -111,12 +123,18 @@ Ehrlich benannt, damit niemand sich auf etwas verlässt, was das Addon nicht kan
 - **Rollen kommen aus der Gruppenzuweisung** (`UnitGroupRolesAssigned`). Wer
   ohne zugewiesene Rolle unterwegs ist, wird nicht überwacht.
 
-*Limitations, stated plainly: the list starts empty and fills as effects hit you
-for the first time or as candidates are promoted; private auras and some
-encounter mechanics are hidden from addons entirely; only group members are
-watched, since WoW draws its own loss-of-control display for yourself; and roles
-come from the group role assignment, so a member without an assigned role is not
-watched.*
+*Limitations, stated plainly: the spell list only drives the SOUND -- icons and
+warning text follow Blizzard's own crowd-control flag and therefore cover
+effects no list has heard of, while the sound is registered per spell ID and
+stays silent for spells the list does not know; the list starts empty and fills
+as effects hit you or as candidates are promoted; inside Mythic+ and PvP nothing
+new is learned, because auras are secret there (the alarm itself still works --
+the game draws and plays it); the engine takes a sound FILE, not a SOUNDKIT id,
+so the built-in interface sounds only play in the test alert and the bundled
+file stands in for them; private auras and some encounter mechanics are hidden
+from addons entirely; only group members are watched, since WoW draws its own
+loss-of-control display for yourself; and roles come from the group role
+assignment, so a member without an assigned role is not watched.*
 
 ## Einstellen
 

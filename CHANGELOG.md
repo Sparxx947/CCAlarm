@@ -1,5 +1,61 @@
 # Changelog
 
+## 0.3.0 — 2026-09-05
+
+**Der Alarm funktioniert jetzt in Mythic+.** 0.2.3 hatte den Fehlerregen dort
+abgestellt und ehrlich gemeldet, dass nichts geht — die Blindheit selbst blieb.
+Sie war vermeidbar: Nicht die Auren mussten lesbar werden, sondern das Lesen
+überflüssig.
+
+Seit 12.1 gibt es **Auren-Container**. Ein Addon meldet einen Filter an, die
+Engine verfolgt, filtert und zeichnet selbst, und das Addon bekommt die Daten
+nie zu sehen — genau deshalb greift die Geheimhaltung nicht.
+
+- **Anzeige:** je überwachter Einheit ein Container mit dem Filter
+  `HARMFUL|CROWD_CONTROL`. Es entscheidet **Blizzards eigene CC-Einstufung**,
+  nicht mehr die gelernte Zauberliste — damit werden auch Effekte gezeigt, die
+  in keiner Liste stehen.
+- **Warntext:** ein zweiter Container auf demselben Filter, dessen Schaltfläche
+  nichts trägt als eine Textzeile. Die Engine blendet sie mit der Aura ein und
+  aus, also erscheint „HEILER IN CC!" genau dann, wenn es stimmt — ohne dass
+  eine einzige Aura gelesen wurde.
+- **Ton:** `C_UnitAuras.AddAuraSound` meldet je Einheit und Zauber-ID eine
+  Datei an, das Spiel spielt sie. Dieser Weg **braucht eine Datei**: SOUNDKIT-
+  Einträge sind Tonpaket-Nummern und werden nicht angenommen. Deshalb liegen
+  jetzt zwei eigene Töne bei (`Media/alarm-healer.ogg`, `Media/alarm-tank.ogg`),
+  und sie sind die neue Voreinstellung. Wer einen SOUNDKIT-Ton eingestellt hat,
+  hört ersatzweise den mitgelieferten; `/ccalarm status` sagt es.
+
+★ **Es gibt nur noch einen Alarmweg, und er ist überall derselbe.** Der alte
+Scan ist kein Rückfall mehr — er löst gar nichts mehr aus und sammelt nur noch
+Kandidaten, dort wo Auren lesbar sind. Ein Weg, der bloß in der halben Welt
+läuft, verrottet unbemerkt.
+
+**Was die Geheimhaltung noch kostet:** In Mythic+ und PvP lernt das Addon keine
+neuen Zauber dazu. Für die Anzeige ist das gleichgültig, für den Ton nicht — er
+hängt weiter an Zauber-IDs. `/ccalarm status` benennt es.
+
+**Weiteres:**
+
+- Die Ton-Anmeldungen werden im Kampf innerhalb einer Instanz von der Engine
+  abgewiesen. Das wird vermerkt und nach dem Kampf (`PLAYER_REGEN_ENABLED`)
+  nachgeholt — sonst wäre der Ton für den ganzen Lauf weg, lautlos.
+- Das Aussehen wird bei der Erzeugung der Schaltflächen **eingebacken**; unter
+  geheimen Auren weist die Engine jedes nachträgliche Setzen ab. Eine geänderte
+  Optik baut deshalb neu — und nur eine geänderte, sonst bliebe bei jedem Klick
+  im Optionsfenster ein Satz Engine-Rahmen liegen.
+- Der Rahmen ist ab jetzt immer „sichtbar": er ist der Elternrahmen der
+  Container. Zu sehen ist an ihm weiterhin nichts, außer dem Griff beim Lösen.
+- `/ccalarm status` nennt überwachte Einheiten und angemeldete Töne. Ohne das
+  wäre nicht zu unterscheiden, ob es ruhig ist oder kaputt.
+- Alte Toneinstellungen werden **einmalig** auf die mitgelieferten Dateien
+  umgestellt — aber nur, wenn sie noch auf der früheren Vorgabe standen. Eine
+  bewusst getroffene Wahl bleibt, samt Hinweis in `/ccalarm status`.
+- Prüfstand auf **144 Prüfungen**: der Container-Weg unter voller Sperre, die
+  Kampfabweisung samt Nachholen, Client ohne Container, Neubau nur bei
+  geändertem Aussehen. `tools/check_secret_auras.py` und `check_scope.py` sahen
+  `Containers.lua` zunächst gar nicht an — ihre Dateilisten sind ergänzt.
+
 ## 0.2.3 — 2026-09-04
 
 **In Mythic+ und PvP war CCAlarm blind — und hat davon nichts gesagt.** Der

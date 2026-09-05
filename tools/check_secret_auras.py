@@ -23,7 +23,7 @@ import re
 import sys
 
 WURZEL = pathlib.Path(__file__).resolve().parent.parent
-DATEIEN = ["CCAlarm.lua", "Config.lua", "Locales.lua", "Data/CCSpells.lua"]
+DATEIEN = ["CCAlarm.lua", "Containers.lua", "Config.lua", "Locales.lua", "Data/CCSpells.lua"]
 
 # Alles, was bei geheimen Auren wirft. Die alten Unit*-Funktionen stehen mit
 # drin, damit ein spaeterer Rueckgriff auf sie nicht am Gatter vorbeikommt.

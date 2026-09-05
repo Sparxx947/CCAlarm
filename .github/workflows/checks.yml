@@ -18,7 +18,10 @@ jobs:
       - name: Lua 5.1 installieren
         run: sudo apt-get update -qq && sudo apt-get install -y -qq lua5.1
       - name: Syntax pruefen
-        run: luac5.1 -p CCAlarm.lua tests/pruefstand.lua
+        # Alle Lua-Dateien per Muster, nicht namentlich: die namentliche Liste
+        # hatte Config.lua, Locales.lua und Containers.lua nicht gesehen, und
+        # eine Pruefung, die eine Datei nicht ansieht, meldet sie als in Ordnung.
+        run: luac5.1 -p *.lua Data/*.lua tests/*.lua
       - name: Pruefstand
         run: lua5.1 tests/pruefstand.lua
 

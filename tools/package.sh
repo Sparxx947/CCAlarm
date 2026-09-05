@@ -16,7 +16,7 @@ trap 'rm -rf "$bau"' EXIT
 mkdir -p "$bau/CCAlarm"
 
 # Nur das, was ins Spiel gehoert -- Pruefstand und Werkzeuge bleiben draussen.
-cp CCAlarm.toc CCAlarm.lua Locales.lua Config.lua LICENSE README.md "$bau/CCAlarm/"
+cp CCAlarm.toc CCAlarm.lua Containers.lua Locales.lua Config.lua LICENSE README.md "$bau/CCAlarm/"
 cp -r Libs Media Data "$bau/CCAlarm/"
 
 # Media/logo.png gehoert auf die CurseForge-Projektseite, nicht ins Spiel. Das
@@ -35,6 +35,16 @@ rm -f "$ziel"
 oben="$(unzip -Z1 "$ziel" | cut -d/ -f1 | sort -u)"
 [ "$oben" = "CCAlarm" ] || { echo "Zip-Aufbau falsch: '$oben'" >&2; exit 1; }
 unzip -Z1 "$ziel" | grep -qx "CCAlarm/CCAlarm.toc" || { echo ".toc fehlt im Zip" >&2; exit 1; }
+
+# Die beiden Alarmtoene MUESSEN drin sein: seit 0.3.0 spielt die Engine sie
+# selbst (AddAuraSound nimmt eine Datei, keine SOUNDKIT-Nummer). Fehlen sie,
+# bleibt der Alarm im Schluesselstein stumm -- und zwar lautlos.
+for ton in alarm-healer.ogg alarm-tank.ogg; do
+  unzip -Z1 "$ziel" | grep -qx "CCAlarm/Media/$ton" || {
+    echo "fehlt im Zip: Media/$ton -- ohne die Datei bleibt der Alarm stumm" >&2
+    exit 1
+  }
+done
 
 # Und die Gegenrichtung: das Projektlogo darf NICHT drin sein. Eine Pruefung,
 # die nur das Vorhandensein prueft, haette das Weglassen nie bemerkt.

@@ -12,6 +12,8 @@ local L = setmetatable({}, {
 ns.L = L
 
 -- enUS / default -------------------------------------------------------------
+L["CC_LABEL_HEALER"]   = "HEALER IN CC!"
+L["CC_LABEL_TANK"]     = "TANK IN CC!"
 L["CC_ALERT_HEALER"]   = "HEALER"
 L["CC_ALERT_TANK"]     = "TANK"
 L["CC_ALERT_FORMAT"]   = "%s CC'D: %s"
@@ -34,10 +36,13 @@ L["MSG_REMOVED"]       = "%d removed."
 L["MSG_CLEARED"]       = "candidate list cleared."
 L["MSG_NEED_ID"]       = "usage: /ccalarm %s <spellID>"
 L["MSG_UNKNOWN"]       = "unknown: %s -- try /ccalarm help"
--- Shown once per instance while Blizzard keeps auras secret. It names the
--- reason and the way out, because a warner that falls silent without saying so
--- is worse than no warner at all.
-L["MSG_AURAS_SECRET"]  = "auras are secret here (Mythic+/PvP): Blizzard blocks addons from reading other players' auras, so no warning can be given until you leave."
+-- Auras being secret no longer stops the alarm (the engine draws and sounds it
+-- since 0.3.0), it stops the addon LEARNING new spells here. Said in status
+-- only, and worded as the limit it actually is.
+L["MSG_AURAS_SECRET"]  = "auras are secret here (Mythic+/PvP): the alarm still works -- it is drawn and played by the game itself -- but no new spells can be picked up while you are inside."
+L["MSG_NO_CONTAINERS"] = "this client has no aura containers (%s), so nothing can be shown. CCAlarm needs patch 12.1."
+L["MSG_ENGINE_STATUS"] = "watched units: %d | engine sounds registered: %d"
+L["MSG_SOUND_SUBSTITUTE"] = "note: the chosen %s sound cannot be handed to the game engine (only sound FILES can), so the bundled one is played instead."
 L["ROLE_HEALER_SHORT"] = "healer "
 L["ROLE_TANK_SHORT"]   = "tank"
 
@@ -90,6 +95,8 @@ L["MSG_POS_RESET"]     = "position reset."
 
 -- deDE -----------------------------------------------------------------------
 if GetLocale() == "deDE" then
+    L["CC_LABEL_HEALER"]   = "HEILER IN CC!"
+    L["CC_LABEL_TANK"]     = "TANK IN CC!"
     L["CC_ALERT_HEALER"]   = "HEILER"
     L["CC_ALERT_TANK"]     = "TANK"
     L["CC_ALERT_FORMAT"]   = "%s IN CC: %s"
@@ -111,7 +118,10 @@ if GetLocale() == "deDE" then
     L["MSG_CLEARED"]       = "Kandidatenliste geleert."
     L["MSG_NEED_ID"]       = "Aufruf: /ccalarm %s <Zauber-ID>"
     L["MSG_UNKNOWN"]       = "unbekannt: %s -- /ccalarm hilfe"
-    L["MSG_AURAS_SECRET"]  = "Auren sind hier geheim (Mythic+/PvP): Blizzard sperrt Addons das Auslesen fremder Auren, bis zum Verlassen ist keine Warnung moeglich."
+    L["MSG_AURAS_SECRET"]  = "Auren sind hier geheim (Mythic+/PvP): der Alarm laeuft trotzdem -- Anzeige und Ton kommen vom Spiel selbst --, nur neue Zauber kann das Addon hier drinnen nicht dazulernen."
+    L["MSG_NO_CONTAINERS"] = "dieser Client kennt keine Auren-Container (%s), es kann nichts angezeigt werden. CCAlarm braucht Patch 12.1."
+    L["MSG_ENGINE_STATUS"] = "ueberwachte Einheiten: %d | beim Spiel angemeldete Toene: %d"
+    L["MSG_SOUND_SUBSTITUTE"] = "Hinweis: der gewaehlte %s-Ton laesst sich der Spiel-Engine nicht uebergeben (nur Ton-DATEIEN gehen), gespielt wird der mitgelieferte."
     L["ROLE_HEALER_SHORT"] = "Heiler "
     L["ROLE_TANK_SHORT"]   = "Tank"
 

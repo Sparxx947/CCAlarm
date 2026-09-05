@@ -405,8 +405,29 @@ end
 -- Refresh
 -------------------------------------------------------------------------------
 
+-- Everything a button carries from birth. A change here can only be applied by
+-- building new buttons; anything not in this stamp is re-driven live and must
+-- NOT be in it, or every options click would leak a batch of engine frames.
+local function styleFingerprint()
+    local db = getDB()
+    local c = db.fontColor or {}
+    return table.concat({
+        tostring(db.iconSize), tostring(db.textSize), tostring(db.fontOutline),
+        tostring(db.fontName), tostring(db.fontPath),
+        tostring(c.r), tostring(c.g), tostring(c.b),
+        tostring(db.iconSpacing),
+    }, "|")
+end
+
+local styleStamp
+
 function C.SetAnchor(frame)
     anchor = frame
+    -- Stamp the look the first containers are about to be born with. Left nil,
+    -- the first options click would find "changed" and throw away containers
+    -- that were built from exactly those settings a moment earlier -- and
+    -- engine frames never come back.
+    if styleStamp == nil then styleStamp = styleFingerprint() end
 end
 
 -- Which group members are watched right now: the roles the user picked, and
@@ -483,22 +504,6 @@ function C.Refresh()
     layout()
     refreshSounds(knownSpells())
 end
-
--- Everything a button carries from birth. A change here can only be applied by
--- building new buttons; anything not in this stamp is re-driven live and must
--- NOT be in it, or every options click would leak a batch of engine frames.
-local function styleFingerprint()
-    local db = getDB()
-    local c = db.fontColor or {}
-    return table.concat({
-        tostring(db.iconSize), tostring(db.textSize), tostring(db.fontOutline),
-        tostring(db.fontName), tostring(db.fontPath),
-        tostring(c.r), tostring(c.g), tostring(c.b),
-        tostring(db.iconSpacing),
-    }, "|")
-end
-
-local styleStamp
 
 -- Called whenever the options change. Three outcomes, not two: rebuild when the
 -- baked-in look moved, refresh when only live settings did, and do neither when

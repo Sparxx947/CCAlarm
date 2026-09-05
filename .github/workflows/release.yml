@@ -44,7 +44,7 @@ jobs:
       # liess Config.lua und die Saatliste aus.
       - name: Nicht ohne gruene Pruefungen ausliefern
         run: |
-          luac5.1 -p CCAlarm.lua Locales.lua Config.lua Data/CCSpells.lua tests/pruefstand.lua
+          luac5.1 -p *.lua Data/*.lua tests/*.lua
           lua5.1 tests/pruefstand.lua
           python3 tools/check_scope.py
           python3 tools/check_toc.py

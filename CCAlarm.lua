@@ -1,25 +1,31 @@
 -- CCAlarm -- warns when the healer or the tank is crowd-controlled.
 --
--- How it detects crowd control, and why it works this way:
+-- How the alarm works, and why it works this way:
 --
--- In Midnight (12.x) COMBAT_LOG_EVENT_UNFILTERED no longer exists, and no aura
--- API classifies crowd control -- neither C_UnitAuras nor the aura data carries
--- such a field. C_LossOfControl reports on the player only. Detecting CC on
--- other group members therefore comes down to a list of spell IDs.
+-- Since 0.3.0 the alarm does not read auras at all. It declares what it wants
+-- to Blizzard's engine and the engine does the rest -- see Containers.lua for
+-- the whole picture:
 --
--- That list is not hardcoded, it is learned: LOSS_OF_CONTROL_ADDED fires for
--- the player and carries Blizzard's own classification (locType) together with
--- the spell ID. Whatever hits you in a dungeon hits the healer and the tank in
--- that same dungeon, so the list fills itself through play and then covers the
--- whole group.
+--   * an AuraContainer per watched unit with the filter HARMFUL|CROWD_CONTROL
+--     draws the icons and the warning text,
+--   * C_UnitAuras.AddAuraSound plays the sound when a known CC spell lands.
 --
--- So the first encounter is not wasted, every harmful aura seen on a healer or
--- tank that is not known yet is recorded as a candidate and can be promoted
--- with a slash command.
-
--- One hard limit sits above all of this: in Mythic+ and PvP, Blizzard keeps
--- auras secret from addons entirely (see aurasRestricted below). There the
--- group cannot be watched at all -- no workaround exists, only saying so.
+-- That is what makes it work inside Mythic+ and PvP, where Blizzard keeps auras
+-- secret from addons entirely (12.x). Reading them there is impossible -- the
+-- API throws -- and until 0.2.3 this addon was therefore silent in every single
+-- keystone.
+--
+-- What is left in THIS file next to the settings, the options and the display
+-- frame: the spell list, and it is no longer what decides whether something is
+-- shown. Blizzard's own CROWD_CONTROL flag does that. The list is what the
+-- engine-side SOUND is bound to, because AddAuraSound wants a spell ID.
+--
+-- The list is not hardcoded, it is learned: LOSS_OF_CONTROL_ADDED fires for the
+-- player and carries Blizzard's own classification (locType) together with the
+-- spell ID. Whatever hits you in a dungeon hits the healer and the tank in that
+-- same dungeon. On top of that, every harmful aura seen on a healer or tank
+-- that is not known yet is recorded as a candidate (collect below) -- outside
+-- Mythic+, which is the one thing secrecy still costs.
 
 local ADDON, ns = ...
 local L = ns.L
@@ -54,8 +60,8 @@ local DEFAULTS = {
     locked        = true,
     -- Sound. soundName is the general one; sounds[role] overrides it per role,
     -- so healer and tank can be told apart without looking at the screen.
-    soundName     = "Raid Warning",
-    sounds        = { HEALER = "Raid Warning", TANK = "Ready Check" },
+    soundName     = "CCAlarm Healer",
+    sounds        = { HEALER = "CCAlarm Healer", TANK = "CCAlarm Tank" },
     soundKit      = "RAID_WARNING",
     inDungeon     = true,
     inArena       = true,
@@ -76,7 +82,6 @@ local DEFAULTS = {
 }
 
 local db              -- CCAlarmDB, set on ADDON_LOADED
-local activeAlarms = {}   -- key -> true, keeps a held aura from retriggering
 local display             -- frame, built lazily
 
 -------------------------------------------------------------------------------
@@ -114,6 +119,16 @@ local BUILTIN_SOUNDS = {
     ["Menu Open"]      = "IG_MAINMENU_OPEN",
     ["Tab"]            = "IG_CHARACTER_INFO_TAB",
 }
+
+-- CCAlarm's own sound files. They exist because the engine-side alarm
+-- (C_UnitAuras.AddAuraSound, see Containers.lua) takes a FILE NAME: the
+-- SOUNDKIT entries above are sound kit ids, not files, and cannot be handed to
+-- it. Two of them, so healer and tank stay apart without looking at the screen.
+local BUNDLED_SOUNDS = {
+    ["CCAlarm Healer"] = "Interface\\AddOns\\CCAlarm\\Media\\alarm-healer.ogg",
+    ["CCAlarm Tank"]   = "Interface\\AddOns\\CCAlarm\\Media\\alarm-tank.ogg",
+}
+ns.BUNDLED_SOUNDS = BUNDLED_SOUNDS
 
 local function lsm()
     return LibStub and LibStub("LibSharedMedia-3.0", true) or nil
@@ -155,7 +170,42 @@ function ns.FontList()
 end
 
 function ns.SoundList()
-    return merge(BUILTIN_SOUNDS, "sound")
+    local all = {}
+    for name in pairs(BUILTIN_SOUNDS) do all[name] = true end
+    for name in pairs(BUNDLED_SOUNDS) do all[name] = true end
+    return merge(all, "sound")
+end
+
+-- The engine-side alarm needs a sound FILE for a role. A bundled file and a
+-- library entry both qualify; a SOUNDKIT name does not, and neither does a
+-- library entry that is a number (LibSharedMedia carries sound kit and file ids
+-- as plain numbers). Whatever cannot be resolved falls back to the bundled file
+-- for that role, so the alarm is never silent just because the chosen sound
+-- cannot be handed to the engine. ns.SoundIsEngineCapable tells the two apart
+-- for /ccalarm status.
+function ns.SoundFileForRole(role)
+    local name = ns.SoundForRole(role)
+    if name and BUNDLED_SOUNDS[name] then return BUNDLED_SOUNDS[name] end
+    local media = lsm()
+    if media and name then
+        local file = media:Fetch("sound", name, true)
+        if type(file) == "string" and file ~= "" then return file end
+    end
+    return (role == "TANK") and BUNDLED_SOUNDS["CCAlarm Tank"]
+                            or BUNDLED_SOUNDS["CCAlarm Healer"]
+end
+
+-- Whether the configured sound itself reaches the engine, or the bundled
+-- stand-in is doing the work.
+function ns.SoundIsEngineCapable(role)
+    local name = ns.SoundForRole(role)
+    if name and BUNDLED_SOUNDS[name] then return true end
+    local media = lsm()
+    if media and name then
+        local file = media:Fetch("sound", name, true)
+        return type(file) == "string" and file ~= ""
+    end
+    return false
 end
 
 -- Resolve the configured font to a usable path. Falls back step by step rather
@@ -178,6 +228,7 @@ ns.FontPath = fontPath
 local function say(text, ...)
     print("|cffff3333CCAlarm|r: " .. string.format(text, ...))
 end
+ns.Say = say
 
 local function fillMissing(target, template)
     for k, v in pairs(template) do
@@ -200,6 +251,7 @@ local function zoneAllowed()
     if kind == "pvp" then return db.inBattleground end
     return db.inWorld
 end
+ns.ZoneAllowed = zoneAllowed
 
 -- Every group unit except the player: for yourself Blizzard already draws its
 -- own loss-of-control display across the middle of the screen.
@@ -214,6 +266,7 @@ local function groupUnits()
     end
     return out
 end
+ns.GroupUnits = groupUnits
 
 -- Secret values (Midnight 12.x): inside Mythic+ and PvP the aura APIs refuse to
 -- answer once an addon sits anywhere in the call path. GetAuraDataByIndex does
@@ -246,16 +299,6 @@ local function aurasRestricted()
     return true
 end
 
--- Said once per instance, and that is the whole point: an alarm addon that goes
--- quiet exactly where it is needed must not go quiet in silence. Reset in
--- PLAYER_ENTERING_WORLD so the next dungeon says it again.
-local restrictionAnnounced = false
-local function announceRestriction()
-    if restrictionAnnounced then return end
-    restrictionAnnounced = true
-    say(L["MSG_AURAS_SECRET"])
-end
-
 -------------------------------------------------------------------------------
 -- Display
 -------------------------------------------------------------------------------
@@ -279,7 +322,12 @@ local function buildDisplay()
         local point, _, relativePoint, x, y = self:GetPoint()
         db.point, db.relativePoint, db.offsetX, db.offsetY = point, relativePoint, x, y
     end)
-    display:Hide()
+    -- The frame itself STAYS SHOWN from here on. It is the parent of the aura
+    -- containers (Containers.lua), and a hidden parent hides them with it --
+    -- the alarm would be built, bound and silent. Nothing of it is visible on
+    -- its own: the grip only appears while unlocked, and text and icons only
+    -- during a test.
+    display:Show()
 
     -- Backdrop shown only while unlocked, so there is something to grab when
     -- no alarm is on screen.
@@ -326,6 +374,11 @@ function ns.ApplyDisplay()
     end
     display:EnableMouse(not db.locked)
     if db.locked then display.grip:Hide() else display.grip:Show() end
+    -- Container buttons bake their look in at creation and cannot be restyled
+    -- afterwards, so a changed look has to rebuild them. ApplySettings decides
+    -- whether anything actually changed -- rebuilding on every call would leak
+    -- a batch of engine frames per click in the options panel.
+    if ns.Containers then ns.Containers.ApplySettings() end
 end
 
 -- Unlocking shows the frame with its grip so it can be dragged even when no
@@ -339,7 +392,9 @@ function ns.SetUnlocked(unlocked)
         frame.text:Show()
         frame:Show()
     elseif not frame.shownByAlarm then
-        frame:Hide()
+        -- Locking only takes the caption away; the frame stays as the
+        -- containers' parent.
+        frame.text:Hide()
     end
 end
 
@@ -363,6 +418,10 @@ end
 -- a library sound is a file that may have gone away with the addon providing it.
 function ns.PlayAlarm(role)
     local name = ns.SoundForRole(role)
+    if name and BUNDLED_SOUNDS[name] then
+        PlaySoundFile(BUNDLED_SOUNDS[name], "Master")
+        return
+    end
     if name and BUILTIN_SOUNDS[name] and SOUNDKIT[BUILTIN_SOUNDS[name]] then
         PlaySound(SOUNDKIT[BUILTIN_SOUNDS[name]], "Master")
         return
@@ -391,7 +450,8 @@ local function show(hits)
     local frame = buildDisplay()
     if #hits == 0 then
         frame.shownByAlarm = false
-        if db.locked then frame:Hide() end
+        frame.text:Hide()
+        for _, icon in ipairs(frame.icons) do icon:Hide() end
         return
     end
 
@@ -440,7 +500,8 @@ function ns.Test()
     C_Timer.After(5, function()
         if display then
             display.shownByAlarm = false
-            if db.locked then display:Hide() end
+            display.text:Hide()
+            for _, icon in ipairs(display.icons) do icon:Hide() end
         end
     end)
 end
@@ -494,7 +555,8 @@ local function spellName(id)
 end
 
 local function learn()
-    if not db.learn then return end
+    if not db.learn then return false end
+    local learned = false
     for i = 1, lossOfControlCount() do
         local data = lossOfControlData(i)
         local id   = data and (data.spellID or data.spellId)
@@ -503,65 +565,47 @@ local function learn()
            and not (ns.SEED_SPELLS and ns.SEED_SPELLS[id]) then
             db.known[id] = kind
             db.candidates[id] = nil
+            learned = true
             say(L["MSG_LEARNED"], spellName(id), id, kind)
         end
     end
+    return learned
 end
 
 -------------------------------------------------------------------------------
 -- Scanning the group
 -------------------------------------------------------------------------------
 
-local function scan()
-    if not db.enabled or not zoneAllowed() then
-        if display then display:Hide() end
-        return
-    end
+-- Collecting candidates -- NOT the alarm.
+--
+-- Since 0.3.0 the alarm itself is engine-side (Containers.lua): Blizzard's own
+-- CROWD_CONTROL filter decides what is shown and the engine plays the sound, so
+-- neither needs an aura read and both work inside a keystone. What this pass
+-- still does is watch for harmful auras the spell list has never seen, so the
+-- engine-side SOUND -- which is bound to spell IDs -- can be told about them.
+--
+-- It runs only where auras are readable, and it raises nothing on its own. A
+-- pass that finds nothing is not a silent alarm; the alarm is elsewhere.
+local function collect()
+    if not db.enabled or not db.collect or not zoneAllowed() then return end
+    if aurasRestricted() then return end
 
-    if aurasRestricted() then
-        announceRestriction()
-        if display then display:Hide() end
-        return
-    end
-
-    local hits = {}
     for _, unit in ipairs(groupUnits()) do
         local role = UnitGroupRolesAssigned(unit)
         if db.roles[role] and not UnitIsDeadOrGhost(unit) then
             local i = 1
             while true do
                 -- Second line of defence: restriction can engage between the
-                -- gate above and this call. Stop the whole pass, not just this
-                -- unit -- the remaining ones would throw just the same, and
-                -- half-read data must not raise a half-informed alarm.
+                -- gate above and this call. Stop the whole pass -- the
+                -- remaining units would throw just the same.
                 local ok, aura = pcall(C_UnitAuras.GetAuraDataByIndex, unit, i, "HARMFUL")
                 if not ok then
                     restrictedStamp = GetTime()
-                    announceRestriction()
-                    if display then display:Hide() end
                     return
                 end
                 if not aura then break end
                 local id = aura.spellId
-                if id and ns.IsKnown(id) then
-                    local duration = aura.duration or 0
-                    if duration == 0 or duration >= db.minDuration then
-                        hits[#hits + 1] = {
-                            name = UnitName(unit) or "?",
-                            role = role,
-                            aura = aura,
-                        }
-                        -- Key against retriggering. auraInstanceID is the exact
-                        -- one but is missing on some auras; fall back to
-                        -- unit+spell rather than staying silent.
-                        local key = aura.auraInstanceID or (unit .. ":" .. id)
-                        if not activeAlarms[key] then
-                            activeAlarms[key] = true
-                            if db.sound then ns.PlayAlarm(role) end
-                        end
-                    end
-                elseif id and db.collect and not db.candidates[id]
-                       and not (ns.SEED_SPELLS and ns.SEED_SPELLS[id]) then
+                if id and not ns.IsKnown(id) and not db.candidates[id] then
                     local duration = aura.duration or 0
                     if duration >= db.minDuration then
                         db.candidates[id] = aura.name or ("spell " .. id)
@@ -571,7 +615,6 @@ local function scan()
             end
         end
     end
-    show(hits)
 end
 
 -------------------------------------------------------------------------------
@@ -595,7 +638,9 @@ local function command(input)
     elseif word == "on" or word == "off" then
         db.enabled = (word == "on")
         say(db.enabled and L["MSG_ON"] or L["MSG_OFF"])
-        if not db.enabled and display then display:Hide() end
+        -- Refresh takes the containers down when the addon is switched off,
+        -- and brings them back when it is switched on.
+        ns.Containers.Refresh()
     elseif word == "status" then
         local known, candidates = 0, 0
         local gezaehlt = {}
@@ -613,7 +658,18 @@ local function command(input)
             db.roles.TANK and L["ROLE_TANK_SHORT"] or "",
             known, candidates,
             zoneAllowed() and L["MSG_YES"] or L["MSG_NO"])
-        -- "active here: yes" would be a lie while the auras are locked away.
+        -- What the engine is actually doing for us right now. A watched count
+        -- of 0 in a party, or 0 registered sounds with the sound switched on,
+        -- is the difference between "quiet" and "broken" -- and nothing else
+        -- can show it, because the alarm itself is invisible to the addon.
+        say(L["MSG_ENGINE_STATUS"], ns.Containers.WatchedCount(), ns.Containers.SoundCount())
+        for _, role in ipairs({ "HEALER", "TANK" }) do
+            if db.roles[role] and not ns.SoundIsEngineCapable(role) then
+                say(L["MSG_SOUND_SUBSTITUTE"],
+                    role == "HEALER" and L["ROLE_HEALER_SHORT"] or L["ROLE_TANK_SHORT"])
+            end
+        end
+        -- Not the alarm any more: what secrecy costs here is the learning.
         if aurasRestricted() then say(L["MSG_AURAS_SECRET"]) end
     elseif word == "test" then
         -- Prove the alarm path without waiting for real crowd control.
@@ -689,21 +745,49 @@ CCAlarm:SetScript("OnEvent", function(self, event, arg1)
         db.candidates = db.candidates or {}
         db.rejected = db.rejected or {}
 
+        -- 0.3.0: the alarm is played by the engine now, and that takes a sound
+        -- FILE. The old defaults were SOUNDKIT entries, which it will not
+        -- accept. Anyone still on those defaults never chose them, so they are
+        -- moved to the bundled files -- once, and marked, so a later change
+        -- back is not undone on the next login. A sound the player actually
+        -- picked is left alone; /ccalarm status says when it cannot be handed
+        -- to the engine.
+        if not db.soundsMigrated then
+            db.soundsMigrated = true
+            local wasDefault = {
+                HEALER = (db.sounds.HEALER == "Raid Warning"),
+                TANK   = (db.sounds.TANK == "Ready Check"),
+            }
+            if wasDefault.HEALER then db.sounds.HEALER = "CCAlarm Healer" end
+            if wasDefault.TANK then db.sounds.TANK = "CCAlarm Tank" end
+            if db.soundName == "Raid Warning" then db.soundName = "CCAlarm Healer" end
+        end
+
         self:UnregisterEvent("ADDON_LOADED")
         self:RegisterEvent("UNIT_AURA")
         self:RegisterEvent("GROUP_ROSTER_UPDATE")
+        self:RegisterEvent("PLAYER_ROLES_ASSIGNED")
         self:RegisterEvent("PLAYER_ENTERING_WORLD")
         self:RegisterEvent("LOSS_OF_CONTROL_ADDED")
         self:RegisterEvent("LOSS_OF_CONTROL_UPDATE")
+        -- The engine refuses sound registrations while the player is in combat
+        -- inside an instance, which is every pull. This is the event that redoes
+        -- the ones it turned away.
+        self:RegisterEvent("PLAYER_REGEN_ENABLED")
 
         SLASH_CCALARM1 = "/ccalarm"
         SlashCmdList.CCALARM = command
         if ns.RegisterOptions then ns.RegisterOptions() end
+        -- The anchor has to exist before the containers can be parented to it.
+        ns.Containers.SetAnchor(buildDisplay())
+        ns.Containers.Refresh()
         return
     end
 
     if event == "LOSS_OF_CONTROL_ADDED" or event == "LOSS_OF_CONTROL_UPDATE" then
-        learn()
+        -- A newly learned spell has to reach the engine-side sound, or it stays
+        -- a spell the addon knows about and the alarm never plays for.
+        if learn() then ns.Containers.Refresh() end
         return
     end
 
@@ -711,11 +795,19 @@ CCAlarm:SetScript("OnEvent", function(self, event, arg1)
         -- Only group units matter; anything else would be constant load.
         if type(arg1) ~= "string" then return end
         if not (arg1:match("^party%d$") or arg1:match("^raid%d+$")) then return end
+        collect()
+        return
     end
 
-    if event == "PLAYER_ENTERING_WORLD" then
-        wipe(activeAlarms)
-        restrictionAnnounced = false
+    if event == "PLAYER_REGEN_ENABLED" then
+        -- Only when a pass was actually turned away, so leaving combat in the
+        -- open world does not re-register a thousand sounds for nothing.
+        if ns.Containers.ConsumeSkipped() then ns.Containers.Refresh() end
+        return
     end
-    scan()
+
+    -- Roster, roles and zone all change WHICH units are watched, and the zone
+    -- also changes whether they are watched at all.
+    ns.Containers.Refresh()
+    collect()
 end)

@@ -17,7 +17,7 @@ import re
 import sys
 
 WURZEL = pathlib.Path(__file__).resolve().parent.parent
-DATEIEN = ["CCAlarm.lua", "Config.lua", "Locales.lua"]
+DATEIEN = ["CCAlarm.lua", "Containers.lua", "Config.lua", "Locales.lua"]
 
 
 def ohne_kommentare(zeile: str) -> str:

@@ -72,13 +72,25 @@ jobs:
           fi
       - name: Paket bauen
         run: tools/package.sh
+      # Pruefsumme mit ausliefern: Wer den Download prueft, braucht etwas, wogegen
+      # er pruefen kann (gh-check-repos meldete 0.3.0 ohne). Standardformat, also
+      # beim Nutzer: sha256sum -c CCAlarm-<version>.zip.sha256
+      # Im selben Lauf gegengeprueft -- eine Pruefsumme, die nicht passt, waere
+      # schlimmer als keine.
+      - name: Pruefsumme erzeugen und gegenpruefen
+        run: |
+          cd dist
+          for z in ./*.zip; do z=${z#./}; sha256sum -- "$z" > "$z.sha256"; done
+          sha256sum -c ./*.sha256
       # Nur der Abschnitt dieser Fassung, nicht der ganze Changelog.
       - name: Releasetext erzeugen
         run: python3 tools/release_notes.py "${GITHUB_REF_NAME}" dist/release-notes.md
       - name: Release anlegen
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/*.zip
+          files: |
+            dist/*.zip
+            dist/*.zip.sha256
           body_path: dist/release-notes.md
       # Zuletzt, und mit Absicht: CurseForge bekommt nur, was alle Gatter oben
       # bestanden hat. Die Projekt-ID steht in der .toc als X-Curse-Project-ID,
